@@ -1,131 +1,121 @@
 # Real-time Students Micro-Sentimental Analysis
 
-Real-time student engagement detection using YOLOv11 object detection on classroom video feeds.
+YOLOv11-based classroom behavior detection for training and live webcam inference.
 
-## 📋 Setup Instructions
+## Project Structure
 
-### Phase 1: Environment Setup
+Your workspace is already in the right shape:
 
-1. **Install Python Dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Verify Installation**
-   ```bash
-   python -c "import torch; print(f'GPU Available: {torch.cuda.is_available()}')"
-   ```
-
-### Phase 2: Dataset Configuration
-
-The dataset is already structured and should be located at:
-```
-dataset/
-├── train/
-│   ├── images/     (training images)
-│   └── labels/     (YOLO format annotations)
-├── valid/
-│   ├── images/     (validation images)
-│   └── labels/     (YOLO format annotations)
-├── test/
-│   ├── images/     (test images)
-│   └── labels/     (YOLO format annotations)
-└── data.yaml       (dataset configuration - already fixed)
+```text
+FYP CODE/
+├── dataset/
+│   ├── train/images, train/labels
+│   ├── valid/images, valid/labels
+│   ├── test/images, test/labels
+│   └── data.yaml
+├── train_model.py
+├── live_inference.py
+├── train_model.ipynb
+└── live_inference.ipynb
 ```
 
-**Class Labels (6 classes):**
-- `handrise` - Student raising hand
-- `read` - Student reading
-- `sleep` - Student sleeping/head down
-- `stand` - Student standing
-- `using_electronic_devices` - Student using phone/phone
-- `write` - Student writing
+`dataset/data.yaml` must keep relative paths:
 
-### Phase 3: Model Training
+```yaml
+train: train/images
+val: valid/images
+test: test/images
+```
 
-Run the training notebook to fine-tune YOLOv11 nano on your dataset:
+## Local Setup (Windows + AMD RX5700)
+
+1. Create and activate a virtual environment.
+2. Install dependencies:
 
 ```bash
-jupyter notebook train_model.ipynb
-```
-
-**Training Configuration:**
-- Model: YOLOv11 Nano (`yolo11n.pt`)
-- Epochs: 20 (adjust as needed for better accuracy)
-- Batch Size: 16 (reduce to 8 if OOM error occurs)
-- Image Size: 640x640
-- Device: Auto-detects GPU if available
-- Output: `fyp_runs/classroom_model_v1/weights/best.pt`
-
-### Phase 4: Live Inference
-
-Once training completes, run the live inference notebook:
-
-```bash
-jupyter notebook live_inference.ipynb
-```
-
-**Features:**
-- Real-time webcam feed processing
-- 0.5 confidence threshold for robust detections
-- Live FPS display and detection count
-- Press 'q' to quit
-
-## 🚀 Quick Start
-
-```bash
-# 1. Install dependencies
 pip install -r requirements.txt
-
-# 2. Run training (first time only)
-jupyter notebook train_model.ipynb
-# → Run all cells, wait for training to complete
-
-# 3. Run live inference
-jupyter notebook live_inference.ipynb
-# → Press 'q' to quit when done
 ```
 
-## 📊 Monitor Training
+3. Train from script:
 
-Training outputs are saved to:
-- `fyp_runs/classroom_model_v1/weights/best.pt` - Best model weights
-- `fyp_runs/classroom_model_v1/results.png` - Training loss/accuracy curves
-- `fyp_runs/classroom_model_v1/confusion_matrix.png` - Confusion matrix
+```bash
+python train_model.py
+```
 
-## ⚙️ Configuration & Troubleshooting
+4. Run live inference:
 
-### Out of Memory (OOM) Error
-If you get OOM error during training:
-1. Edit the training notebook
-2. Find the training configuration cell
-3. Change `batch: 16` to `batch: 8` and rerun
+```bash
+python live_inference.py --show-fps
+```
 
-### Low FPS During Inference
-If real-time inference is slow:
-1. Ensure GPU is available: `torch.cuda.is_available()`
-2. Reduce image size in inference (modify `imgsz` parameter)
-3. Increase confidence threshold to filter fewer detections
+Notes for AMD on Windows:
+- Standard PyTorch on Windows does not use AMD RX5700 for GPU training.
+- The script will automatically fall back to CPU.
+- For fast GPU training, use Google Colab GPU.
 
-### Webcam Not Opening
-If webcam fails to open:
-1. Try different webcam indices: `WEBCAM_INDEX = 1` or `2`
-2. Verify no other application is using the webcam
-3. Check USB connection
+## Colab Setup (Dataset in Drive root /dataset)
 
-## 📈 Next Steps for Production
+In Colab, run:
 
-1. **Increase Training Epochs**: From 20 to 50-100 for better accuracy
-2. **Add Training Data**: Collect more diverse classroom scenarios
-3. **Class Balancing**: Ensure balanced representation of all 6 classes
-4. **Optimize Inference**: Use ONNX or TensorRT for 3x-5x speedup
-5. **Deployment**: Containerize with Docker for university servers
+```python
+from google.colab import drive
+drive.mount('/content/drive')
+```
 
-## 📚 References
+```bash
+!pip install ultralytics opencv-python
+```
 
-- [Ultralytics YOLOv11 Documentation](https://docs.ultralytics.com/models/yolov11/)
-- [PyTorch CUDA Setup](https://pytorch.org/get-started/locally/)
-- [YOLOv11 Training Guide](https://docs.ultralytics.com/modes/train/)
+If your code is in GitHub, clone it:
 
----
-**Final Year Project** | Lahore Garrison University
+```bash
+!git clone https://github.com/<your-user>/<your-repo>.git
+%cd <your-repo>
+```
+
+Train using your Drive dataset:
+
+```bash
+!python train_model.py --data /content/drive/MyDrive/dataset/data.yaml --project /content/drive/MyDrive/fyp_runs
+```
+
+Run inference (Colab webcam support is limited in standard notebooks; local PC is recommended for realtime webcam):
+
+```bash
+!python live_inference.py --model-path /content/drive/MyDrive/fyp_runs/classroom_model_v1/weights/best.pt
+```
+
+## Notebook Usage
+
+If you prefer notebooks:
+
+```bash
+jupyter notebook
+```
+
+Open and run:
+- `train_model.ipynb`
+- `live_inference.ipynb`
+
+Use the same dataset path logic:
+- Local: `dataset/data.yaml`
+- Colab: `/content/drive/MyDrive/dataset/data.yaml`
+
+## Outputs
+
+Training creates:
+- `fyp_runs/classroom_model_v1/weights/best.pt`
+- `fyp_runs/classroom_model_v1/results.png`
+- `fyp_runs/classroom_model_v1/confusion_matrix.png`
+
+## Troubleshooting
+
+OOM during training:
+- Run `python train_model.py --batch 8`
+
+Webcam not opening:
+- Try `python live_inference.py --source 1`
+
+Wrong model path:
+- Pass explicit path:
+`python live_inference.py --model-path fyp_runs/classroom_model_v1/weights/best.pt`
