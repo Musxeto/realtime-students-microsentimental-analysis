@@ -1,1 +1,4 @@
 dataset/
+.github/
+.venv/
+__pycache__/
