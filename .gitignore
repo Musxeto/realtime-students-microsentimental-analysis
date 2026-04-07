@@ -1,4 +1,6 @@
 dataset/
+datasets/
+master_dataset/
 .github/
 .venv/
 __pycache__/
