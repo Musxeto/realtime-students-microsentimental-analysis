@@ -53,6 +53,27 @@ Notes for AMD on Windows:
 - The script will automatically fall back to CPU.
 - For fast GPU training, use Google Colab GPU.
 
+## Video Extraction
+
+The video pipeline lives in `ai/tests/test_video.py`. It processes every 5th frame, runs the two-stage person + behavior pipeline, and prints a JSON summary.
+
+Example run on Windows with DirectML-friendly ONNX models:
+
+```bash
+pip install -r requirements.txt
+yolo export model=ai/fyp_runs/classroom_model_v2/weights/best.pt format=onnx
+python ai/tests/test_video.py path\to\classroom.mp4 --show-providers
+```
+
+If you want AMD RX5700 acceleration on Windows, install the DirectML runtime in the same environment:
+
+```bash
+pip uninstall -y onnxruntime
+pip install onnxruntime-directml
+```
+
+For Colab, keep using standard `onnxruntime` or PyTorch on GPU; `onnxruntime-directml` is Windows-only.
+
 ## Colab Setup (Dataset in Drive root /dataset)
 
 In Colab, run:
@@ -119,3 +140,7 @@ Webcam not opening:
 Wrong model path:
 - Pass explicit path:
 `python live_inference.py --model-path fyp_runs/classroom_model_v1/weights/best.pt`
+
+Video extractor not finding a file:
+- Pass the video path explicitly:
+`python ai/tests/test_video.py D:\videos\classroom.mp4`

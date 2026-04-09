@@ -7,3 +7,5 @@ numpy>=1.24.0
 Pillow>=10.0.0
 matplotlib>=3.8.0
 notebook>=7.0.0
+onnxruntime-directml>=1.18.0; platform_system == "Windows"
+onnxruntime>=1.18.0; platform_system != "Windows"
