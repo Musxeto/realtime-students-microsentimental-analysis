@@ -6,11 +6,21 @@ export interface AuthState {
 }
 
 export interface LoginRequest {
-  username: string
+  email?: string
+  username?: string
   password: string
+}
+
+export interface UserSummary {
+  id: number
+  name: string
+  email: string
+  role: string
+  is_active?: boolean
 }
 
 export interface LoginResponse {
   access_token: string
   token_type?: string
+  user?: UserSummary
 }

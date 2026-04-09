@@ -113,3 +113,119 @@ def test_session_start_end_and_websocket_stream(client, monkeypatch):
     end = client.post(f"/sessions/{session_id}/end", headers={"Authorization": f"Bearer {admin_token}"})
     assert end.status_code == 200
     assert end.json()["status"] == "COMPLETED"
+
+
+def test_sessions_list_and_detail_endpoints(client, monkeypatch):
+    admin_token = _login(client, "admin@fyp.com", "admin123")
+    teacher_token = _login(client, "teacher@fyp.com", "teacher123")
+
+    monkeypatch.setattr(inference_service, "stream_video", _MockStream())
+
+    courses = client.get("/courses", headers={"Authorization": f"Bearer {admin_token}"}).json()
+    assert len(courses) > 0
+    course_id = courses[0]["id"]
+    video_path = courses[0]["available_videos"][0] if courses[0]["available_videos"] else "tests/test_video.mp4"
+
+    start = client.post(
+        "/sessions/start",
+        json={"course_id": course_id, "video_path": video_path, "frame_step": 5},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert start.status_code == 200
+    session_id = start.json()["session_id"]
+
+    list_all = client.get("/sessions", headers={"Authorization": f"Bearer {admin_token}"})
+    assert list_all.status_code == 200
+    assert list_all.json()["total"] >= 1
+    assert any(item["id"] == session_id for item in list_all.json()["items"])
+
+    detail = client.get(f"/sessions/{session_id}", headers={"Authorization": f"Bearer {admin_token}"})
+    assert detail.status_code == 200
+    assert detail.json()["id"] == session_id
+
+    teacher_detail = client.get(f"/sessions/{session_id}", headers={"Authorization": f"Bearer {teacher_token}"})
+    assert teacher_detail.status_code in (200, 404)
+
+    ended = client.post(f"/sessions/{session_id}/end", headers={"Authorization": f"Bearer {admin_token}"})
+    assert ended.status_code == 200
+
+
+def test_session_logs_and_analytics_endpoints(client, monkeypatch):
+    admin_token = _login(client, "admin@fyp.com", "admin123")
+
+    monkeypatch.setattr(inference_service, "stream_video", _MockStream())
+
+    courses = client.get("/courses", headers={"Authorization": f"Bearer {admin_token}"}).json()
+    assert len(courses) > 0
+    course = courses[0]
+    video_path = course["available_videos"][0] if course["available_videos"] else "tests/test_video.mp4"
+
+    started = client.post(
+        "/sessions/start",
+        json={"course_id": course["id"], "video_path": video_path, "frame_step": 5},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert started.status_code == 200
+    session_id = started.json()["session_id"]
+
+    with client.websocket_connect(f"/sessions/ws/stream/{session_id}") as ws:
+        _ = ws.receive_json()
+        _ = ws.receive_json()
+
+    ended = client.post(f"/sessions/{session_id}/end", headers={"Authorization": f"Bearer {admin_token}"})
+    assert ended.status_code == 200
+
+    logs = client.get(f"/sessions/{session_id}/logs", headers={"Authorization": f"Bearer {admin_token}"})
+    assert logs.status_code == 200
+    assert logs.json()["total"] >= 1
+
+    course_analytics = client.get(f"/courses/{course['id']}/analytics", headers={"Authorization": f"Bearer {admin_token}"})
+    assert course_analytics.status_code == 200
+    assert course_analytics.json()["course_id"] == course["id"]
+
+    teacher_analytics = client.get(
+        f"/admin/teachers/{course['instructor_id']}/analytics",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert teacher_analytics.status_code == 200
+    assert teacher_analytics.json()["teacher_id"] == course["instructor_id"]
+
+
+def test_admin_teacher_management_and_course_crud(client):
+    admin_token = _login(client, "admin@fyp.com", "admin123")
+
+    teachers_res = client.get("/admin/teachers", headers={"Authorization": f"Bearer {admin_token}"})
+    assert teachers_res.status_code == 200
+    teachers = teachers_res.json()
+    assert len(teachers) >= 1
+
+    target_teacher = next((t for t in teachers if t["email"] == "teacher@fyp.com"), teachers[0])
+    teacher_id = target_teacher["id"]
+    disable_res = client.patch(
+        f"/admin/teachers/{teacher_id}",
+        json={"is_active": False},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert disable_res.status_code == 200
+    disabled_email = disable_res.json()["email"]
+
+    blocked_login = client.post("/auth/login", json={"email": disabled_email, "password": "teacher123"})
+    assert blocked_login.status_code == 403
+
+    enable_res = client.patch(
+        f"/admin/teachers/{teacher_id}",
+        json={"is_active": True},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert enable_res.status_code == 200
+
+    create_course_res = client.post(
+        "/courses",
+        json={"course_name": "Classroom X", "instructor_id": teacher_id},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_course_res.status_code == 200
+    course_id = create_course_res.json()["id"]
+
+    delete_course_res = client.delete(f"/courses/{course_id}", headers={"Authorization": f"Bearer {admin_token}"})
+    assert delete_course_res.status_code == 204

@@ -1,9 +1,20 @@
 import useWebSocket from 'react-use-websocket'
 import { WS_BASE_URL } from '../config/env'
 
-interface SessionPayload {
-  engagement?: number
+export interface SessionPayload {
+  session_id?: number
+  frame_index: number
+  timestamp_sec: number
+  engagement_score: number
+  engaged_count: number
+  distracted_count: number
+  classifications?: Array<Record<string, unknown>>
   message?: string
+  alert_state?: {
+    active: boolean
+    reason: string
+    triggered_at?: string
+  }
 }
 
 export function useSessionWebSocket(sessionId: string | undefined) {
@@ -11,7 +22,7 @@ export function useSessionWebSocket(sessionId: string | undefined) {
     ? `${WS_BASE_URL}/sessions/ws/stream/${sessionId}`
     : null
 
-  const { sendJsonMessage, lastJsonMessage, readyState } = useWebSocket<SessionPayload>(
+  const { lastJsonMessage, readyState } = useWebSocket<SessionPayload>(
     socketUrl,
     {
       shouldReconnect: () => true,
@@ -24,7 +35,6 @@ export function useSessionWebSocket(sessionId: string | undefined) {
   )
 
   return {
-    sendJsonMessage,
     lastJsonMessage,
     readyState,
   }

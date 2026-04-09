@@ -10,7 +10,7 @@ export function LoginPage() {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
   const [login, { isLoading }] = useLoginMutation()
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -19,7 +19,7 @@ export function LoginPage() {
     setError(null)
 
     try {
-      const result = await login({ username, password }).unwrap()
+      const result = await login({ email, password }).unwrap()
       const role = extractRoleFromToken(result.access_token)
 
       dispatch(setCredentials({ accessToken: result.access_token, role }))
@@ -44,15 +44,16 @@ export function LoginPage() {
         <h1 className="text-2xl font-semibold text-slate-900">Welcome Back</h1>
         <p className="mt-1 text-sm text-slate-600">Sign in to continue to your classroom dashboard.</p>
 
-        <label className="mt-6 block text-sm font-medium text-slate-700" htmlFor="username">
-          Username
+        <label className="mt-6 block text-sm font-medium text-slate-700" htmlFor="email">
+          Email
         </label>
         <input
-          id="username"
-          value={username}
-          onChange={(event) => setUsername(event.target.value)}
+          id="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          type="email"
           className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none ring-indigo-500 focus:ring-2"
-          autoComplete="username"
+          autoComplete="email"
           required
         />
 

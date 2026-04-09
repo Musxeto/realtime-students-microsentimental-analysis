@@ -22,6 +22,7 @@ class UserOut(BaseModel):
     name: str
     email: EmailStr
     role: str
+    is_active: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -47,6 +48,27 @@ class CourseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CreateCourseRequest(BaseModel):
+    course_name: str = Field(min_length=2, max_length=255)
+    instructor_id: int | None = None
+
+
+class TeacherListItem(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+    role: str
+    is_active: bool
+    course_count: int
+    session_count: int
+
+
+class UpdateTeacherRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    email: EmailStr | None = None
+    is_active: bool | None = None
+
+
 class StartSessionRequest(BaseModel):
     course_id: int
     video_path: str
@@ -64,6 +86,76 @@ class EndSessionResponse(BaseModel):
     session_id: int
     status: str
     final_avg_score: float | None
+
+
+class SessionOut(BaseModel):
+    id: int
+    course_id: int
+    status: str
+    start_time: datetime
+    end_time: datetime | None = None
+    final_avg_score: float | None = None
+    video_path: str | None = None
+    session_metadata: dict[str, Any] | None = None
+
+
+class SessionListResponse(BaseModel):
+    items: list[SessionOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class SessionLogOut(BaseModel):
+    id: int
+    session_id: int
+    timestamp: datetime
+    engagement_score: float
+    engaged_count: int
+    distracted_count: int
+    payload: dict[str, Any] | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SessionLogsResponse(BaseModel):
+    items: list[SessionLogOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class SessionScorePoint(BaseModel):
+    session_id: int
+    start_time: datetime
+    final_avg_score: float
+
+
+class CourseAnalyticsResponse(BaseModel):
+    course_id: int
+    course_name: str
+    sessions_count: int
+    completed_sessions_count: int
+    avg_final_score: float | None
+    peak_final_score: float | None
+    lowest_final_score: float | None
+    trend: list[SessionScorePoint] = Field(default_factory=list)
+
+
+class TeacherCourseAnalytics(BaseModel):
+    course_id: int
+    course_name: str
+    sessions_count: int
+    avg_final_score: float | None
+
+
+class TeacherAnalyticsResponse(BaseModel):
+    teacher_id: int
+    teacher_name: str
+    total_courses: int
+    total_sessions: int
+    overall_avg_final_score: float | None
+    courses: list[TeacherCourseAnalytics] = Field(default_factory=list)
 
 
 class ErrorResponse(BaseModel):

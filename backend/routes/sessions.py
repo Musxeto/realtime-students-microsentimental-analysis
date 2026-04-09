@@ -3,8 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 import asyncio
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.orm import Session
 
 from ai.inference_utils import resolve_video_path
@@ -12,14 +13,33 @@ from ai.inference_utils import resolve_video_path
 from ..config import settings
 from ..database import SessionLocal, get_db
 from ..deps import get_current_user
-from ..models import ClassSession, Course, SessionStatus, User, UserRole
-from ..schemas import EndSessionResponse, StartSessionRequest, StartSessionResponse
+from ..models import ClassSession, Course, SessionLog, SessionStatus, User, UserRole
+from ..schemas import EndSessionResponse, SessionListResponse, SessionLogsResponse, SessionLogOut, SessionOut, StartSessionRequest, StartSessionResponse
 from ..services.database import session_repository
 from ..services.inference_service import inference_service
 from ..services.session_manager import session_manager
 
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+
+def _apply_role_scope(base_query, current_user: User):
+    if current_user.role == UserRole.ADMIN:
+        return base_query
+    return base_query.join(Course, Course.id == ClassSession.course_id).filter(Course.instructor_id == current_user.id)
+
+
+def _to_session_out(session: ClassSession) -> SessionOut:
+    return SessionOut(
+        id=session.id,
+        course_id=session.course_id,
+        status=session.status.value,
+        start_time=session.start_time,
+        end_time=session.end_time,
+        final_avg_score=session.final_avg_score,
+        video_path=session.video_path,
+        session_metadata=session.session_metadata,
+    )
 
 
 async def _auto_complete_if_disconnected(session_id: int):
@@ -49,6 +69,54 @@ async def _auto_complete_if_disconnected(session_id: int):
         db.commit()
 
     session_manager.mark_finished(session_id)
+
+
+@router.get("", response_model=SessionListResponse)
+def list_sessions(
+    course_id: Optional[int] = None,
+    status_filter: Optional[SessionStatus] = Query(default=None, alias="status"),
+    limit: int = Query(default=20, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    query = _apply_role_scope(db.query(ClassSession), current_user)
+    if course_id is not None:
+        query = query.filter(ClassSession.course_id == course_id)
+    if status_filter is not None:
+        query = query.filter(ClassSession.status == status_filter)
+
+    total = query.count()
+    rows = query.order_by(ClassSession.start_time.desc()).offset(offset).limit(limit).all()
+    return SessionListResponse(items=[_to_session_out(row) for row in rows], total=total, limit=limit, offset=offset)
+
+
+@router.get("/{session_id}", response_model=SessionOut)
+def get_session(session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    query = _apply_role_scope(db.query(ClassSession), current_user)
+    session = query.filter(ClassSession.id == session_id).first()
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    return _to_session_out(session)
+
+
+@router.get("/{session_id}/logs", response_model=SessionLogsResponse)
+def get_session_logs(
+    session_id: int,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    session_query = _apply_role_scope(db.query(ClassSession), current_user)
+    db_session = session_query.filter(ClassSession.id == session_id).first()
+    if db_session is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    logs_query = db.query(SessionLog).filter(SessionLog.session_id == session_id)
+    total = logs_query.count()
+    rows = logs_query.order_by(SessionLog.timestamp.asc()).offset(offset).limit(limit).all()
+    return SessionLogsResponse(items=[SessionLogOut.model_validate(row) for row in rows], total=total, limit=limit, offset=offset)
 
 
 @router.post("/start", response_model=StartSessionResponse)

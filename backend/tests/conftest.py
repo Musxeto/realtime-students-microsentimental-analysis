@@ -44,6 +44,12 @@ def client() -> TestClient:
     alembic_cfg.set_main_option("sqlalchemy.url", TEST_DATABASE_URL)
     command.upgrade(alembic_cfg, "head")
 
+    from backend.bootstrap import ensure_seed_data
+    from backend.database import SessionLocal
+
+    with SessionLocal() as seed_db:
+        ensure_seed_data(seed_db)
+
     from backend.main import app
 
     with TestClient(app) as test_client:
