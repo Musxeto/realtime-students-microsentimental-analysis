@@ -25,6 +25,18 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CreateTeacherRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    password: str = Field(min_length=4)
+    course_names: list[str] = Field(default_factory=list)
+
+
+class CreateTeacherResponse(BaseModel):
+    teacher: UserOut
+    courses: list["CourseOut"] = Field(default_factory=list)
+
+
 class CourseOut(BaseModel):
     id: int
     course_name: str

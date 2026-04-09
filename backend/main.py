@@ -8,6 +8,7 @@ from .bootstrap import ensure_seed_data
 from .database import engine
 from .migrations import upgrade_to_head
 from .models import ClassSession, Course, SessionLog, User
+from .routes.admin import router as admin_router
 from .routes.auth import router as auth_router
 from .routes.courses import router as courses_router
 from .routes.sessions import router as sessions_router
@@ -15,6 +16,7 @@ from .routes.sessions import router as sessions_router
 
 app = FastAPI(title="Real-time Students Micro-Sentimental Analysis API", version="0.1.0")
 
+app.include_router(admin_router)
 app.include_router(auth_router)
 app.include_router(courses_router)
 app.include_router(sessions_router)
