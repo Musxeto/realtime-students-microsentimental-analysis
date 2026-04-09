@@ -59,7 +59,7 @@ def resolve_image_path(ai_dir: Path, user_path: str | None, script_dir: Path) ->
         raise FileNotFoundError(f"Image path does not exist or cannot be read: {p}")
 
     default_candidates = [
-        script_dir / "test_image3.jpg",
+        script_dir / "test_image4.jpg",
     ]
     for p in default_candidates:
         if can_read_image(p):
@@ -138,7 +138,7 @@ def main():
     parser.add_argument("--person-model", help="Path to YOLO person model (.pt)")
     parser.add_argument("--behavior-model", help="Path to behavior model (.pt)")
     parser.add_argument("--person-conf", type=float, default=0.3, help="Confidence threshold for person detector")
-    parser.add_argument("--behavior-conf", type=float, default=0.2, help="Confidence threshold for behavior classifier")
+    parser.add_argument("--behavior-conf", type=float, default=0.1, help="Confidence threshold for behavior classifier")
     parser.add_argument("--imgsz", type=int, default=960, help="Inference size for person detector")
     parser.add_argument("--max-det", type=int, default=500, help="Max person detections")
     args = parser.parse_args()
@@ -209,7 +209,19 @@ def main():
         if x2 <= x1 or y2 <= y1:
             continue
 
-        person_crop = original_img[y1:y2, x1:x2]
+        # DIAGNOSTIC: Draw a thin RED box so we can visually see all Stage 1 detections
+        cv2.rectangle(final_img, (x1, y1), (x2, y2), (0, 0, 255), 1)
+
+        # THE CRITICAL FIX: Add padding so Stage 2 has context
+        pad = 20
+        px1 = max(0, x1 - pad)
+        py1 = max(0, y1 - pad)
+        px2 = min(w, x2 + pad)
+        py2 = min(h, y2 + pad)
+
+        # Crop using the PADDED coordinates, not the tight coordinates
+        person_crop = original_img[py1:py2, px1:px2]
+
         if person_crop.size == 0 or person_crop.shape[0] < 12 or person_crop.shape[1] < 12:
             continue
 
@@ -233,10 +245,12 @@ def main():
             label = names.get(cls_id, str(cls_id)) if isinstance(names, dict) else names[cls_id]
 
         if label == "unknown":
+            print(f"Person {idx}: Stage 1 found them, but Stage 2 failed to classify.")
             continue
 
         print(f"Person {idx}: class={label}, class_conf={bconf:.2f}")
 
+        # SUCCESS: Overwrite the red box with the thick, colored behavior box
         color = class_color(label)
         cv2.rectangle(final_img, (x1, y1), (x2, y2), color, 2)
         text = f"{label} {bconf:.2f}"
