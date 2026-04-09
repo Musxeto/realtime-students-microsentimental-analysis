@@ -32,17 +32,17 @@ def _login(client, email: str, password: str) -> str:
 
 
 def test_login_success(client):
-    token = _login(client, "teacher@fyp.local", "teacher123")
+    token = _login(client, "teacher@fyp.com", "teacher123")
     assert token
 
 
 def test_admin_teacher_provisioning_rbac(client):
-    teacher_token = _login(client, "teacher@fyp.local", "teacher123")
-    admin_token = _login(client, "admin@fyp.local", "admin123")
+    teacher_token = _login(client, "teacher@fyp.com", "teacher123")
+    admin_token = _login(client, "admin@fyp.com", "admin123")
 
     payload = {
         "name": "Teacher Two",
-        "email": "teacher2@fyp.local",
+        "email": "teacher2@fyp.com",
         "password": "1234",
         "course_names": ["Classroom C"],
     }
@@ -61,12 +61,12 @@ def test_admin_teacher_provisioning_rbac(client):
     )
     assert admin_attempt.status_code == 200
     body = admin_attempt.json()
-    assert body["teacher"]["email"] == "teacher2@fyp.local"
+    assert body["teacher"]["email"] == "teacher2@fyp.com"
     assert len(body["courses"]) == 1
 
 
 def test_session_start_end_and_websocket_stream(client, monkeypatch):
-    admin_token = _login(client, "admin@fyp.local", "admin123")
+    admin_token = _login(client, "admin@fyp.com", "admin123")
 
     monkeypatch.setattr(inference_service, "stream_video", _MockStream())
 
