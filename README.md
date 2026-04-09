@@ -1,402 +1,263 @@
-# Real-time Students Micro-Sentimental Analysis (FYP)
+# Real-Time Students Micro-Sentimental Analysis
 
-YOLOv11-based classroom behavior analytics with a FastAPI backend for authenticated session control, real-time WebSocket streaming, PostgreSQL persistence, and AMD GPU support.
+End-to-end FYP platform for classroom behavior analytics using YOLO-based inference, a FastAPI backend, PostgreSQL storage, and a modern React dashboard.
 
-## ✅ Fully Implemented Features
+## What This Project Does
 
-### Backend API (FastAPI 0.135+)
-- ✅ **JWT Authentication**: Secure token-based access via `python-jose + passlib`
-- ✅ **Role-Based Access Control** (RBAC): Admin sees all courses; Teachers see only assigned courses
-- ✅ **Session Management**: Start/End/Pause session endpoints with persistence
-- ✅ **WebSocket Real-Time Streaming**: Frame-by-frame inference results with engagement metrics
-- ✅ **Admin Teacher Provisioning**: Create new teachers + assign courses via dedicated admin endpoint
-- ✅ **Health & Readiness Checks**: `/health` endpoint with db_connected + models_loaded flags
-- ✅ **Batch Session Logging**: Logs flushed every 60 frames to reduce DB writes
-- ✅ **Error Handling Middleware**: Structured JSON error responses with timestamps
+- Runs frame-by-frame classroom analysis from video input.
+- Streams live metrics through WebSocket.
+- Persists sessions and logs in PostgreSQL.
+- Supports role-based workflows for admin and teacher users.
+- Provides a modern frontend stack for real-time dashboard UX.
 
-### Database (PostgreSQL 15 + Alembic 1.13+)
-- ✅ **Alembic Migrations**: Auto-discovered SQLAlchemy models, versioned schema applied on startup
-- ✅ **ORM Models**: User, Course, ClassSession, SessionLog with proper relationships
-- ✅ **Test Bootstrap**: `fyp_test` database auto-created; schema reset per test session
-- ✅ **Seed Data**: 3 pre-configured teachers + 4 courses auto-populated on first run
-- ✅ **Batch Writes**: SessionRepository pattern for bulk log inserts
+## Current Technology Stack
 
-### Inference Engine
-- ✅ **Async Frame Processing**: `InferenceEngine` wraps YOLO pipeline with `asyncio` streaming
-- ✅ **Lazy Model Loading**: Models warm-loaded on startup, not on import
-- ✅ **Frame-by-Frame Output**: Per-frame detections, engagement count, distraction metrics
-- ✅ **Multi-Source Support**: Reads from local MP4 files with FPS/frame-skip handling
+### AI and Inference
 
-### Testing & Validation
-- ✅ **Pytest Suite**: 3 passing tests covering auth, RBAC, session lifecycle, WebSocket
-- ✅ **FastAPI TestClient**: Async WebSocket mock validation
-- ✅ **Local PostgreSQL Integration**: Tests use real database (not in-memory)
+- Ultralytics YOLO pipeline in [ai/inference_utils.py](ai/inference_utils.py)
+- ONNX Runtime DirectML on Windows for AMD acceleration
+- CPU fallback if GPU acceleration is unavailable
 
----
+### Backend
 
-## Repository Layout
+- FastAPI
+- SQLAlchemy + Alembic
+- PostgreSQL 15
+- JWT auth with python-jose and passlib
+- WebSocket streaming endpoint for live session telemetry
 
-```
+### Frontend
+
+- React 18 + Vite + TypeScript
+- Redux Toolkit + RTK Query
+- React Router v6
+- Tailwind CSS
+- Tremor charts
+- react-use-websocket
+- react-icons + lucide-react
+
+## Repository Structure
+
+```text
 FYP CODE/
-├── backend/
-│   ├── main.py                    # FastAPI app + startup/shutdown handlers
-│   ├── config.py                  # Settings (DB URL, model paths)
-│   ├── models.py                  # SQLAlchemy ORM (User, Course, Session, Log)
-│   ├── bootstrap.py               # Auto-seed data on startup
-│   ├── schemas.py                 # Pydantic request/response models
-│   ├── deps.py                    # JWT dependency injection
-│   ├── security.py                # Password hashing + token creation
-│   ├── database.py                # SQLAlchemy engine + session factory
-│   ├── migrations.py              # Alembic upgrade helper
-│   ├── routes/
-│   │   ├── auth.py               # POST /auth/login
-│   │   ├── courses.py            # GET /courses
-│   │   ├── sessions.py           # POST/GET /sessions, WebSocket /ws/stream
-│   │   └── admin.py              # POST /admin/teachers
-│   ├── services/
-│   │   ├── inference_service.py  # InferenceEngine wrapper (async streaming)
-│   │   ├── session_manager.py    # In-memory session state + log buffering
-│   │   └── database.py           # SessionRepository (ORM operations)
-│   ├── alembic/
-│   │   ├── env.py                # Alembic environment auto-discovery
-│   │   └── versions/
-│   │       └── 0001_initial_schema.py
-│   ├── scripts/
-│   │   └── seed_db.py            # Standalone seeding utility
-│   ├── tests/
-│   │   ├── conftest.py           # Pytest fixtures (DB setup)
-│   │   └── test_api.py           # API contract tests
-│   └── requirements.txt           # FastAPI, SQLAlchemy, Alembic, pytest, etc.
-│
-├── ai/
-│   ├── inference_utils.py        # Refactored YOLO pipeline
-│   ├── fyp-notebook.ipynb        # Model training notebook
-│   ├── train_model.ipynb
-│   ├── yolo11n.pt / yolo11n.onnx # Person detector models
-│   ├── fyp_runs/classroom_model_v2/weights/ # Behavior classifier
-│   └── dataset/                  # Training + validation data
-│
-├── docs/
-│   └── backend_plan.md           # Full implementation roadmap
-├── README.md                      # This file
-├── requirements.txt              # ML deps (ultralytics, torch, opencv, onnxruntime-directml)
-└── alembic.ini                   # Alembic config (points to backend/alembic)
+  ai/                    # Model files, notebooks, datasets, inference helpers
+  backend/               # FastAPI service, routes, ORM models, tests
+  docs/                  # Plans, reports, implementation notes
+  frontend/              # React dashboard
+  alembic.ini            # Alembic config
+  docker-compose.yml     # Local Postgres + API stack
+  Dockerfile             # Backend image
 ```
-
----
 
 ## Prerequisites
 
-- **Python 3.11+** (tested with 3.12 in `.venv`)
-- **PostgreSQL 15** (local instance on `localhost:5432`)
-  - Create database: `createdb fyp`
-  - Credentials: username `postgres`, password `1234`
-- **Model files** (pre-downloaded in repo):
-  - `ai/yolo11n.pt` or `yolo11n.onnx` (person detector)
-  - `ai/fyp_runs/classroom_model_v2/weights/best.pt` or `best.onnx` (behavior classifier)
+- Python 3.11+
+- Node.js 18+
+- npm 9+
+- PostgreSQL 15 (or Docker)
 
----
+## Environment Variables
 
-## Quick Start (Local, No Docker)
+Backend reads configuration from [backend/config.py](backend/config.py).
 
-### 1. Activate Virtual Environment
+Required or recommended variables:
+
+- DATABASE_URL
+  - Local default: postgresql+psycopg2://postgres:1234@localhost:5432/fyp
+- SECRET_KEY
+  - Default exists for development, change for production.
+- AI_DIR
+  - Default: ./ai
+- VIDEO_ROOT
+  - Default: ./ai
+- ACCESS_TOKEN_EXPIRE_MINUTES
+  - Default: 300
+- SESSION_LOG_BATCH_SIZE
+  - Default: 60
+- SESSION_DISCONNECT_TIMEOUT_SECONDS
+  - Default: 30
+
+Frontend variables:
+
+- VITE_API_BASE_URL
+  - Default: http://localhost:8000
+- VITE_WS_BASE_URL
+  - Default: ws://localhost:8000
+
+## Local Setup (Windows or Linux)
+
+### 1. Backend setup
 
 ```powershell
+cd "d:\FYP\FYP CODE"
+python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-```
-
-### 2. Install Backend Dependencies
-
-```powershell
 pip install -r backend/requirements.txt
+pip install -r requirements.txt
 ```
 
-### 3. Run Database Migrations
+Run migrations:
 
 ```powershell
 python -m alembic -c alembic.ini upgrade head
 ```
 
-### 4. Start FastAPI Server
+Start API:
 
 ```powershell
 uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**Server startup logs:**
-```
-INFO:     Uvicorn running on http://0.0.0.0:8000
-INFO:     Waiting for application startup.
-INFO:     Running Alembic migrations...
-INFO:     Seeding default teachers and courses...
-INFO:     Loading YOLO models (this may take 1–2 minutes)...
-INFO:     Application startup complete.
-```
-
-### 5. Verify Health Endpoint
+Health check:
 
 ```powershell
 curl http://localhost:8000/health
-# Output: {"status":"ok","db_connected":true,"models_loaded":true}
 ```
 
-### 6. Access Interactive Docs
+### 2. Frontend setup
 
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-
----
-
-## Seeded Accounts & Test Data
-
-On first startup, the backend auto-seeds:
-
-| Role | Email | Password | Notes |
-|------|-------|----------|-------|
-| Admin | `admin@fyp.com` | `password123` | All permissions |
-| Teacher 1 | `teacher@fyp.com` | `password123` | Classroom A, B |
-| Teacher 2 | `teacher2@fyp.com` | `password123` | Classroom C |
-| Teacher 3 | `teacher3@fyp.com` | `password123` | Classroom D |
-
-**Courses**:
-- `Classroom A`, `Classroom B` → Teacher 1
-- `Classroom C` → Teacher 2
-- `Classroom D` → Teacher 3
-
----
-
-## API Usage Examples
-
-### 1. Login & Get JWT Token
-
-```http
-POST /auth/login
-Content-Type: application/json
-
-{
-  "email": "teacher@fyp.com",
-  "password": "password123"
-}
-```
-
-**Response:**
-```json
-{
-  "access_token": "eyJhbGc...",
-  "token_type": "bearer",
-  "user": {
-    "id": "550e8400-e29b-41d4-a716-446655440001",
-    "name": "Teacher One",
-    "email": "teacher@fyp.com",
-    "role": "teacher"
-  }
-}
-```
-
-### 2. List Your Courses
-
-```http
-GET /courses
-Authorization: Bearer eyJhbGc...
-```
-
-**Response:**
-```json
-[
-  {
-    "id": "550e8400-e29b-41d4-a716-446655440010",
-    "course_name": "Classroom A",
-    "instructor_id": "550e8400-e29b-41d4-a716-446655440002",
-    "available_videos": ["test_video.mp4", "classroom_video_001.mp4"]
-  },
-  {
-    "id": "550e8400-e29b-41d4-a716-446655440011",
-    "course_name": "Classroom B",
-    "instructor_id": "550e8400-e29b-41d4-a716-446655440002",
-    "available_videos": []
-  }
-]
-```
-
-### 3. Start Analysis Session
-
-```http
-POST /sessions/start
-Authorization: Bearer eyJhbGc...
-Content-Type: application/json
-
-{
-  "course_id": "550e8400-e29b-41d4-a716-446655440010",
-  "video_path": "tests/test_video.mp4",
-  "frame_step": 5
-}
-```
-
-**Response:**
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440020",
-  "course_id": "550e8400-e29b-41d4-a716-446655440010",
-  "start_time": "2026-04-09T10:30:00Z",
-  "status": "RUNNING",
-  "video_path": "tests/test_video.mp4"
-}
-```
-
-### 4. Stream Real-Time Analytics via WebSocket
-
-```
-ws://localhost:8000/sessions/ws/stream/550e8400-e29b-41d4-a716-446655440020
-```
-
-Connect with JWT in headers (or query param):
-```
-ws://localhost:8000/sessions/ws/stream/550e8400-e29b-41d4-a716-446655440020?token=eyJhbGc...
-```
-
-**Frame payload (per-message):**
-```json
-{
-  "timestamp_sec": 12.4,
-  "frame_index": 62,
-  "detections": [
-    {
-      "person_id": 1,
-      "box": [100, 150, 200, 300],
-      "label": "engaged",
-      "confidence": 0.91
-    }
-  ],
-  "aggregate_stats": {
-    "total_persons": 8,
-    "engaged_count": 6,
-    "distracted_count": 2,
-    "avg_engagement": 0.75
-  }
-}
-```
-
-### 5. End Session
-
-```http
-POST /sessions/{session_id}/end
-Authorization: Bearer eyJhbGc...
-```
-
-**Response:**
-```json
-{
-  "session_id": "550e8400-e29b-41d4-a716-446655440020",
-  "status": "COMPLETED",
-  "end_time": "2026-04-09T10:35:30Z",
-  "final_stats": {
-    "total_frames": 156,
-    "avg_engagement_score": 0.73,
-    "peak_engaged_time": "2026-04-09T10:33:15Z"
-  }
-}
-```
-
-### 6. Admin: Create New Teacher
-
-```http
-POST /admin/teachers
-Authorization: Bearer eyJhbGc... (admin token)
-Content-Type: application/json
-
-{
-  "name": "New Teacher",
-  "email": "newteacher@fyp.com",
-  "password": "temppass123",
-  "course_names": ["Advanced Classroom", "Lab A"]
-}
-```
-
-**Response:**
-```json
-{
-  "teacher": {
-    "id": "550e8400-e29b-41d4-a716-446655440030",
-    "name": "New Teacher",
-    "email": "newteacher@fyp.com",
-    "role": "teacher"
-  },
-  "courses": [
-    {"id": "...", "course_name": "Advanced Classroom", "instructor_id": "..."},
-    {"id": "...", "course_name": "Lab A", "instructor_id": "..."}
-  ]
-}
-```
-
----
-
-## Windows + AMD RX5700 GPU Support
-
-### Local Setup (Recommended for Development)
-
-The backend uses **ONNX Runtime with DirectML** on Windows, which works well with AMD GPUs:
-
-1. **Ensure models are in ONNX format**:
-   - `ai/yolo11n.onnx` (person detector)
-   - `ai/fyp_runs/classroom_model_v2/weights/best.onnx` (behavior classifier)
-
-2. **Install ONNX DirectML** (already in `requirements.txt`):
-   ```powershell
-   pip install onnxruntime-directml
-   ```
-
-3. **Verify GPU acceleration**:
-   Check startup logs for:
-   ```
-   Loading person_detector.onnx (DirectML backend enabled)
-   ```
-
-4. **Fallback behavior**: If DirectML is unavailable, ONNX Runtime automatically falls back to CPU inference.
-
-### Windows PowerShell Notes
-
-To run standalone video test:
 ```powershell
+cd "d:\FYP\FYP CODE\frontend"
+npm install
+npm run dev
+```
+
+Frontend dev URL:
+
+- http://localhost:5173
+
+## Docker Setup (Backend + Postgres)
+
+The file [docker-compose.yml](docker-compose.yml) starts:
+
+- db: PostgreSQL 15
+- api: FastAPI app
+
+Run:
+
+```powershell
+cd "d:\FYP\FYP CODE"
+docker compose up --build
+```
+
+## Authentication and Roles
+
+- Login endpoint: POST /auth/login
+- JWT carries role claim.
+- Supported roles:
+  - admin
+  - teacher
+
+Role behavior:
+
+- admin can manage teachers and courses globally.
+- teacher only accesses assigned course/session scope.
+
+## Core Backend Endpoints
+
+- GET /health
+- POST /auth/login
+- GET /courses
+- POST /sessions/start
+- POST /sessions/{session_id}/end
+- WS /sessions/ws/stream/{session_id}
+- POST /admin/teachers
+
+Swagger docs:
+
+- http://localhost:8000/docs
+
+## Seeded Default Accounts
+
+First startup seeds sample users and courses.
+
+Typical credentials:
+
+- admin@fyp.com / password123
+- teacher@fyp.com / password123
+- teacher2@fyp.com / password123
+- teacher3@fyp.com / password123
+
+If these are changed in seed scripts, trust the current seed source in [backend/bootstrap.py](backend/bootstrap.py).
+
+## Frontend Architecture (Current)
+
+The dashboard is feature-oriented:
+
+```text
+frontend/src/
+  app/                 # store, router, providers
+  components/          # shared layout/UI
+  config/              # env constants
+  features/
+    auth/
+    admin/
+    teacher/
+    live-session/
+  hooks/
+  services/
+  types/
+```
+
+Key files:
+
+- [frontend/src/app/store.ts](frontend/src/app/store.ts)
+- [frontend/src/app/router.tsx](frontend/src/app/router.tsx)
+- [frontend/src/services/api/apiSlice.ts](frontend/src/services/api/apiSlice.ts)
+- [frontend/src/hooks/useSessionWebSocket.ts](frontend/src/hooks/useSessionWebSocket.ts)
+
+## Running Tests
+
+Backend tests:
+
+```powershell
+cd "d:\FYP\FYP CODE"
+pytest backend/tests -v
+```
+
+AI video smoke test:
+
+```powershell
+cd "d:\FYP\FYP CODE"
 python ai/tests/test_video.py
 ```
 
-To run API tests:
-```powershell
-pytest backend/tests -v
-```
-
----
-
-## Testing
-
-### Run All Tests
+Frontend type and build check:
 
 ```powershell
-pytest backend/tests -v
+cd "d:\FYP\FYP CODE\frontend"
+npm run build
 ```
 
-**Expected output:**
-```
-backend/tests/test_api.py::test_login_success PASSED
-backend/tests/test_api.py::test_admin_teacher_provisioning_rbac PASSED
-backend/tests/test_api.py::test_session_start_end_and_websocket_stream PASSED
-```
+## AMD RX5700 and Windows Notes
 
-### Test Database
+- This project supports AMD GPUs on Windows via onnxruntime-directml.
+- If DirectML is unavailable, inference falls back to CPU.
+- Keep ONNX model artifacts available for best Windows performance.
 
-Tests use a provisioned `fyp_test` database:
-- Auto-created if missing
-- Schema reset before each test session
-- Uses real PostgreSQL (not in-memory)
+## Colab Workflow Notes
 
-### Manual API Testing with Postman
+- Use notebooks in [ai/fyp-notebook.ipynb](ai/fyp-notebook.ipynb) and [ai/train_model.ipynb](ai/train_model.ipynb).
+- Train/export in Colab GPU, then copy model artifacts back to this repository.
+- Keep local inference paths aligned with backend settings AI_DIR and VIDEO_ROOT.
 
-1. Import endpoints from http://localhost:8000/openapi.json
-2. Authenticate: POST `/auth/login` → save token to environment
-3. Test courses: GET `/courses` with auth header
-4. Create session: POST `/sessions/start`
-5. Connect WebSocket: `ws://localhost:8000/sessions/ws/stream/{session_id}`
-6. End session: POST `/sessions/{session_id}/end`
+## Common Troubleshooting
+
+- Module not found errors in frontend:
+  - Run npm install in [frontend](frontend)
+  - Restart TS server in VS Code if diagnostics are stale
+- Database connection issues:
+  - Verify DATABASE_URL and PostgreSQL service
+  - Re-run alembic upgrade command
+- WebSocket does not stream:
+  - Confirm session was created with /sessions/start
+  - Confirm frontend uses ws:// base URL and valid session id
+
+## Project Status
+
+- Backend core auth, RBAC, sessions, and streaming are implemented.
+- Frontend foundation and role-based shell are in place.
+- Live UI analytics and admin/teacher feature screens are scaffolded and ready for endpoint wiring.
 
 ---
 
