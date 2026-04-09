@@ -6,6 +6,7 @@ import {
   useDeleteCourseMutation,
   useGetAlertConfigQuery,
   useGetCoursesQuery,
+  useGetTeacherAnalyticsQuery,
   useGetTeachersQuery,
   useUpdateAlertConfigMutation,
   useUpdateTeacherMutation,
@@ -27,6 +28,10 @@ export function AdminDashboardPage() {
 
   const [newCourseName, setNewCourseName] = useState('')
   const [instructorId, setInstructorId] = useState<number | null>(null)
+  const [selectedTeacherId, setSelectedTeacherId] = useState<number | null>(null)
+  const { data: teacherAnalytics } = useGetTeacherAnalyticsQuery(selectedTeacherId ?? 0, {
+    skip: selectedTeacherId == null,
+  })
 
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null)
   const { data: selectedAlertConfig } = useGetAlertConfigQuery(selectedCourseId ?? 0, {
@@ -42,6 +47,12 @@ export function AdminDashboardPage() {
       setSelectedCourseId(courses[0].id)
     }
   }, [courses, selectedCourseId])
+
+  useEffect(() => {
+    if (!selectedTeacherId && teachers.length > 0) {
+      setSelectedTeacherId(teachers[0].id)
+    }
+  }, [selectedTeacherId, teachers])
 
   useEffect(() => {
     if (!selectedAlertConfig) {
@@ -287,6 +298,52 @@ export function AdminDashboardPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-white p-4 shadow-card">
+        <h2 className="text-lg font-semibold text-slate-900">Teacher Analytics</h2>
+        <div className="mt-3 grid gap-3 md:grid-cols-[260px_1fr]">
+          <select
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            value={selectedTeacherId ?? ''}
+            onChange={(event) => setSelectedTeacherId(Number(event.target.value))}
+          >
+            {teachers.map((teacher) => (
+              <option key={teacher.id} value={teacher.id}>
+                {teacher.name}
+              </option>
+            ))}
+          </select>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+            <p className="text-sm text-slate-600">Teacher: <span className="font-semibold text-slate-900">{teacherAnalytics?.teacher_name ?? '-'}</span></p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-3 text-sm">
+              <p className="rounded-md bg-white px-2 py-1">Courses: <span className="font-semibold">{teacherAnalytics?.total_courses ?? 0}</span></p>
+              <p className="rounded-md bg-white px-2 py-1">Sessions: <span className="font-semibold">{teacherAnalytics?.total_sessions ?? 0}</span></p>
+              <p className="rounded-md bg-white px-2 py-1">Avg Engagement: <span className="font-semibold">{teacherAnalytics?.overall_avg_final_score == null ? '-' : `${Math.round(teacherAnalytics.overall_avg_final_score)}%`}</span></p>
+            </div>
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-full text-left text-xs">
+                <thead className="text-slate-500">
+                  <tr>
+                    <th className="py-1 pr-3">Course</th>
+                    <th className="py-1 pr-3">Sessions</th>
+                    <th className="py-1 pr-3">Avg</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(teacherAnalytics?.courses ?? []).map((course) => (
+                    <tr key={course.course_id} className="border-t border-slate-200">
+                      <td className="py-1 pr-3">{course.course_name}</td>
+                      <td className="py-1 pr-3">{course.sessions_count}</td>
+                      <td className="py-1 pr-3">{course.avg_final_score == null ? '-' : `${Math.round(course.avg_final_score)}%`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
 
