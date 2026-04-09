@@ -1,18 +1,30 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAppDispatch } from '../../../app/hooks'
+import { useAppDispatch, useAppSelector } from '../../../app/hooks'
 import { useLoginMutation } from '../../../services/api/apiSlice'
 import { setCredentials } from '../authSlice'
 import { extractRoleFromToken } from '../token'
+import type { UserRole } from '../../../types/auth'
 
 export function LoginPage() {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
+  const role = useAppSelector((state) => state.auth.role)
   const [login, { isLoading }] = useLoginMutation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (role === 'admin') {
+      navigate('/admin', { replace: true })
+      return
+    }
+    if (role === 'teacher') {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [navigate, role])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -20,11 +32,22 @@ export function LoginPage() {
 
     try {
       const result = await login({ email, password }).unwrap()
-      const role = extractRoleFromToken(result.access_token)
+      const roleFromUser = result.user?.role?.toLowerCase()
+      const normalizedRole: UserRole | null =
+        roleFromUser === 'admin' || roleFromUser === 'teacher'
+          ? roleFromUser
+          : extractRoleFromToken(result.access_token)
 
-      dispatch(setCredentials({ accessToken: result.access_token, role }))
+      dispatch(
+        setCredentials({
+          accessToken: result.access_token,
+          refreshToken: result.refresh_token,
+          role: normalizedRole,
+          user: result.user ?? null,
+        }),
+      )
 
-      if (role === 'admin') {
+      if (normalizedRole === 'admin') {
         navigate('/admin')
         return
       }

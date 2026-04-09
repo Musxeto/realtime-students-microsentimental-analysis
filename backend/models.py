@@ -30,6 +30,7 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role = Column(Enum(UserRole), nullable=False, default=UserRole.TEACHER)
     is_active = Column(Boolean, nullable=False, default=True)
+    token_version = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     courses = relationship("Course", back_populates="instructor", cascade="all, delete-orphan")

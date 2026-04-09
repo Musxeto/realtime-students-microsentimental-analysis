@@ -8,6 +8,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str | None = None
     token_type: str = "bearer"
     user: Optional["UserOut"] = None
 
@@ -25,6 +26,23 @@ class UserOut(BaseModel):
     is_active: bool = True
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(min_length=16)
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str | None = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=4)
+    new_password: str = Field(min_length=4)
+
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str = Field(min_length=4)
 
 
 class CreateTeacherRequest(BaseModel):

@@ -157,6 +157,10 @@ Role behavior:
 
 - GET /health
 - POST /auth/login
+- GET /auth/me
+- POST /auth/refresh
+- POST /auth/logout
+- POST /auth/change-password
 - GET /courses
 - POST /courses
 - DELETE /courses/{course_id}
@@ -174,6 +178,7 @@ Role behavior:
 - GET /admin/teachers
 - PATCH /admin/teachers/{teacher_id}
 - GET /admin/teachers/{teacher_id}/analytics
+- POST /admin/users/{user_id}/reset-password
 
 Swagger docs:
 

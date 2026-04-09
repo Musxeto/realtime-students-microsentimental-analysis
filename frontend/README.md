@@ -79,7 +79,10 @@ Route protection is role-based in src/features/auth/ProtectedRoute.tsx.
 ## Implemented Dashboard Features
 
 - Role-based login redirect (admin to /admin, teacher to /dashboard)
+- Auth lifecycle support: /auth/me + token refresh + logout API integration
+- User password change from dashboard shell (current/new password flow)
 - Admin teacher lifecycle controls (create, activate/deactivate)
+- Admin password reset for users
 - Admin course allocation (create/delete)
 - Per-course alert configuration controls (threshold, duration, enabled)
 - Teacher course analytics cards and lecture history table

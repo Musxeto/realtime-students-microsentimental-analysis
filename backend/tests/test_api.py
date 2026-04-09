@@ -58,6 +58,15 @@ def _login(client, email: str, password: str) -> str:
     return res.json()["access_token"]
 
 
+def _login_tokens(client, email: str, password: str) -> dict:
+    res = client.post("/auth/login", json={"email": email, "password": password})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["access_token"]
+    assert body.get("refresh_token")
+    return body
+
+
 def test_login_success(client):
     token = _login(client, "teacher@fyp.com", "teacher123")
     assert token
@@ -68,6 +77,56 @@ def test_login_success(client):
     assert body["status"] == "ok"
     assert body["db_connected"] is True
     assert body["models_loaded"] is True
+
+
+def test_auth_me_refresh_logout_and_change_password(client):
+    tokens = _login_tokens(client, "teacher@fyp.com", "teacher123")
+    access = tokens["access_token"]
+    refresh = tokens["refresh_token"]
+
+    me = client.get("/auth/me", headers={"Authorization": f"Bearer {access}"})
+    assert me.status_code == 200
+    assert me.json()["email"] == "teacher@fyp.com"
+
+    refreshed = client.post("/auth/refresh", json={"refresh_token": refresh})
+    assert refreshed.status_code == 200
+    new_access = refreshed.json()["access_token"]
+    new_refresh = refreshed.json()["refresh_token"]
+    assert new_access
+    assert new_refresh
+
+    changed = client.post(
+        "/auth/change-password",
+        json={"current_password": "teacher123", "new_password": "teacher1234"},
+        headers={"Authorization": f"Bearer {new_access}"},
+    )
+    assert changed.status_code == 200
+
+    old_login = client.post("/auth/login", json={"email": "teacher@fyp.com", "password": "teacher123"})
+    assert old_login.status_code == 401
+
+    relogin = _login_tokens(client, "teacher@fyp.com", "teacher1234")
+    relogin_access = relogin["access_token"]
+    relogin_refresh = relogin["refresh_token"]
+
+    logout_res = client.post(
+        "/auth/logout",
+        json={"refresh_token": relogin_refresh},
+        headers={"Authorization": f"Bearer {relogin_access}"},
+    )
+    assert logout_res.status_code == 200
+
+    # Restore teacher password for deterministic future test runs.
+    admin_token = _login(client, "admin@fyp.com", "admin123")
+    teachers = client.get("/admin/teachers", headers={"Authorization": f"Bearer {admin_token}"}).json()
+    teacher = next((row for row in teachers if row["email"] == "teacher@fyp.com"), None)
+    assert teacher is not None
+    reset_res = client.post(
+        f"/admin/users/{teacher['id']}/reset-password",
+        json={"new_password": "teacher123"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert reset_res.status_code == 200
 
 
 def test_login_with_username_field(client):

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from hashlib import pbkdf2_hmac
 from hmac import compare_digest
 import secrets
+from uuid import uuid4
 
 from fastapi import HTTPException, status
 from jose import JWTError, jwt
@@ -33,10 +34,30 @@ def verify_password(password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(subject: str, extra_claims: dict | None = None) -> str:
+    return create_token(
+        subject,
+        token_type="access",
+        expires_delta=timedelta(minutes=settings.access_token_expire_minutes),
+        extra_claims=extra_claims,
+    )
+
+
+def create_refresh_token(subject: str, extra_claims: dict | None = None) -> str:
+    return create_token(
+        subject,
+        token_type="refresh",
+        expires_delta=timedelta(days=settings.refresh_token_expire_days),
+        extra_claims=extra_claims,
+    )
+
+
+def create_token(subject: str, token_type: str, expires_delta: timedelta, extra_claims: dict | None = None) -> str:
     now = datetime.now(timezone.utc)
     payload = {
         "sub": subject,
-        "exp": int((now + timedelta(minutes=settings.access_token_expire_minutes)).timestamp()),
+        "typ": token_type,
+        "jti": str(uuid4()),
+        "exp": int((now + expires_delta).timestamp()),
         "iat": int(now.timestamp()),
     }
     if extra_claims:
@@ -45,6 +66,20 @@ def create_access_token(subject: str, extra_claims: dict | None = None) -> str:
 
 
 def decode_access_token(token: str) -> dict:
+    payload = decode_token(token)
+    if payload.get("typ") != "access":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+    return payload
+
+
+def decode_refresh_token(token: str) -> dict:
+    payload = decode_token(token)
+    if payload.get("typ") != "refresh":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+    return payload
+
+
+def decode_token(token: str) -> dict:
     try:
         return jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
     except JWTError as exc:

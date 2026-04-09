@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
+  useAdminResetUserPasswordMutation,
   useCreateCourseMutation,
   useCreateTeacherMutation,
   useDeleteCourseMutation,
@@ -17,6 +18,7 @@ export function AdminDashboardPage() {
   const { data: courses = [], isError: coursesError } = useGetCoursesQuery()
   const [createTeacher, { isLoading: creatingTeacher }] = useCreateTeacherMutation()
   const [updateTeacher] = useUpdateTeacherMutation()
+  const [adminResetUserPassword] = useAdminResetUserPasswordMutation()
   const [createCourse] = useCreateCourseMutation()
   const [deleteCourse] = useDeleteCourseMutation()
   const [updateAlertConfig] = useUpdateAlertConfigMutation()
@@ -125,6 +127,21 @@ export function AdminDashboardPage() {
       setFeedback('Course deleted.')
     } catch {
       setFeedback('Could not delete course.')
+    }
+  }
+
+  async function handleResetPassword(userId: number) {
+    const newPassword = window.prompt('Enter new password for this user')
+    if (!newPassword || newPassword.trim().length < 4) {
+      setFeedback('Password reset cancelled or too short.')
+      return
+    }
+
+    try {
+      await adminResetUserPassword({ userId, new_password: newPassword.trim() }).unwrap()
+      setFeedback('User password reset successfully.')
+    } catch {
+      setFeedback('Could not reset user password.')
     }
   }
 
@@ -241,6 +258,7 @@ export function AdminDashboardPage() {
                 <th className="py-2 pr-4">Courses</th>
                 <th className="py-2 pr-4">Sessions</th>
                 <th className="py-2 pr-4">Status</th>
+                <th className="py-2 pr-4">Security</th>
               </tr>
             </thead>
             <tbody>
@@ -260,6 +278,15 @@ export function AdminDashboardPage() {
                       ].join(' ')}
                     >
                       {teacher.is_active ? 'Active' : 'Inactive'}
+                    </button>
+                  </td>
+                  <td className="py-2 pr-4">
+                    <button
+                      type="button"
+                      onClick={() => handleResetPassword(teacher.id)}
+                      className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      Reset Password
                     </button>
                   </td>
                 </tr>

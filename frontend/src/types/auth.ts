@@ -2,7 +2,9 @@ export type UserRole = 'admin' | 'teacher'
 
 export interface AuthState {
   accessToken: string | null
+  refreshToken: string | null
   role: UserRole | null
+  user: UserSummary | null
 }
 
 export interface LoginRequest {
@@ -21,6 +23,7 @@ export interface UserSummary {
 
 export interface LoginResponse {
   access_token: string
+  refresh_token?: string
   token_type?: string
   user?: UserSummary
 }

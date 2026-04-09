@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..deps import get_admin_user
 from ..models import ClassSession, Course, User, UserRole
-from ..schemas import CourseOut, CreateTeacherRequest, CreateTeacherResponse, TeacherAnalyticsResponse, TeacherCourseAnalytics, TeacherListItem, UpdateTeacherRequest, UserOut
+from ..schemas import CourseOut, CreateTeacherRequest, CreateTeacherResponse, ResetPasswordRequest, TeacherAnalyticsResponse, TeacherCourseAnalytics, TeacherListItem, UpdateTeacherRequest, UserOut
 from ..security import hash_password
 
 
@@ -140,3 +140,21 @@ def update_teacher(teacher_id: int, payload: UpdateTeacherRequest, admin_user: U
     db.commit()
     db.refresh(teacher)
     return UserOut.model_validate(teacher)
+
+
+@router.post("/users/{user_id}/reset-password")
+def admin_reset_user_password(
+    user_id: int,
+    payload: ResetPasswordRequest,
+    admin_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    _ = admin_user
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user.hashed_password = hash_password(payload.new_password)
+    user.token_version += 1
+    db.commit()
+    return {"message": "Password reset successful"}

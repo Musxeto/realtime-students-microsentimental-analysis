@@ -2,8 +2,8 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
 import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query/react'
 import { API_BASE_URL } from '../../config/env'
 import type { RootState } from '../../app/store'
-import type { LoginRequest, LoginResponse } from '../../types/auth'
-import { logout } from '../../features/auth/authSlice'
+import type { LoginRequest, LoginResponse, UserSummary } from '../../types/auth'
+import { logout, setCredentials, setCurrentUser } from '../../features/auth/authSlice'
 
 export interface Course {
   id: number
@@ -154,9 +154,40 @@ const baseQueryWithAuthGuard: BaseQueryFn<string | FetchArgs, unknown, FetchBase
   api,
   extraOptions,
 ) => {
-  const result = await rawBaseQuery(args, api, extraOptions)
+  let result = await rawBaseQuery(args, api, extraOptions)
+
   if (result.error?.status === 401) {
-    api.dispatch(logout())
+    const state = api.getState() as RootState
+    const refreshToken = state.auth.refreshToken
+    if (refreshToken) {
+      const refreshResult = await rawBaseQuery(
+        {
+          url: '/auth/refresh',
+          method: 'POST',
+          body: { refresh_token: refreshToken },
+        },
+        api,
+        extraOptions,
+      )
+
+      if (refreshResult.data) {
+        const payload = refreshResult.data as LoginResponse
+        const role = payload.user?.role?.toLowerCase() as 'admin' | 'teacher' | undefined
+        api.dispatch(
+          setCredentials({
+            accessToken: payload.access_token,
+            refreshToken: payload.refresh_token,
+            role: role ?? null,
+            user: payload.user ?? null,
+          }),
+        )
+        result = await rawBaseQuery(args, api, extraOptions)
+      } else {
+        api.dispatch(logout())
+      }
+    } else {
+      api.dispatch(logout())
+    }
   }
   return result
 }
@@ -169,6 +200,38 @@ export const apiSlice = createApi({
     login: builder.mutation<LoginResponse, LoginRequest>({
       query: (body) => ({
         url: '/auth/login',
+        method: 'POST',
+        body,
+      }),
+    }),
+    getMe: builder.query<UserSummary, void>({
+      query: () => '/auth/me',
+      async onQueryStarted(_, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled
+          dispatch(setCurrentUser(data))
+        } catch {
+          // No-op; handled by auth guard.
+        }
+      },
+    }),
+    refresh: builder.mutation<LoginResponse, { refresh_token: string }>({
+      query: (body) => ({
+        url: '/auth/refresh',
+        method: 'POST',
+        body,
+      }),
+    }),
+    logoutApi: builder.mutation<{ message: string }, { refresh_token?: string }>({
+      query: (body) => ({
+        url: '/auth/logout',
+        method: 'POST',
+        body,
+      }),
+    }),
+    changePassword: builder.mutation<{ message: string }, { current_password: string; new_password: string }>({
+      query: (body) => ({
+        url: '/auth/change-password',
         method: 'POST',
         body,
       }),
@@ -268,6 +331,14 @@ export const apiSlice = createApi({
       }),
       invalidatesTags: ['Teacher'],
     }),
+    adminResetUserPassword: builder.mutation<{ message: string }, { userId: number; new_password: string }>({
+      query: ({ userId, new_password }) => ({
+        url: `/admin/users/${userId}/reset-password`,
+        method: 'POST',
+        body: { new_password },
+      }),
+      invalidatesTags: ['Teacher'],
+    }),
     getTeacherAnalytics: builder.query<{
       teacher_id: number
       teacher_name: string
@@ -284,6 +355,10 @@ export const apiSlice = createApi({
 
 export const {
   useLoginMutation,
+  useGetMeQuery,
+  useRefreshMutation,
+  useLogoutApiMutation,
+  useChangePasswordMutation,
   useGetCoursesQuery,
   useCreateCourseMutation,
   useDeleteCourseMutation,
@@ -299,5 +374,6 @@ export const {
   useGetTeachersQuery,
   useCreateTeacherMutation,
   useUpdateTeacherMutation,
+  useAdminResetUserPasswordMutation,
   useGetTeacherAnalyticsQuery,
 } = apiSlice
