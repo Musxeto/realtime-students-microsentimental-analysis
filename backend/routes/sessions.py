@@ -13,6 +13,7 @@ from ..database import get_db
 from ..deps import get_current_user
 from ..models import ClassSession, Course, SessionStatus, User, UserRole
 from ..schemas import EndSessionResponse, StartSessionRequest, StartSessionResponse
+from ..services.database import session_repository
 from ..services.inference_service import inference_service
 from ..services.session_manager import session_manager
 
@@ -56,13 +57,25 @@ def end_session(session_id: int, current_user: User = Depends(get_current_user),
     if current_user.role != UserRole.ADMIN and course.instructor_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot end this session")
 
+    pending_logs = session_manager.drain_log_buffer(session_id)
+    if pending_logs:
+        session_repository.add_session_logs(session_id, pending_logs)
+
+    summary = session_manager.final_summary(session_id)
+    final_avg_score = float(summary.get("avg_engagement_score", 0.0))
+
     session.status = SessionStatus.COMPLETED
     session.end_time = datetime.utcnow()
-    if session.final_avg_score is None:
-        session.final_avg_score = 0
+    session.final_avg_score = final_avg_score
+
+    metadata = session.session_metadata or {}
+    metadata["final_summary"] = summary
+    session.session_metadata = metadata
     db.commit()
+
+    session_repository.finalize_session(session_id, final_avg_score, summary)
     session_manager.mark_finished(session_id)
-    return EndSessionResponse(session_id=session.id, status=session.status.value, final_avg_score=session.final_avg_score)
+    return EndSessionResponse(session_id=session.id, status=session.status.value, final_avg_score=final_avg_score)
 
 
 @router.websocket("/ws/stream/{session_id}")
@@ -76,7 +89,13 @@ async def stream_session(websocket: WebSocket, session_id: int):
 
     try:
         async for payload in inference_service.stream_video(state.video_path, frame_step=state.frame_step):
-            state.last_payload = payload
+            session_manager.consume_frame_payload(session_id, payload)
+
+            state = session_manager.get(session_id)
+            if state and len(state.log_buffer) >= settings.session_log_batch_size:
+                batch = session_manager.drain_log_buffer(session_id)
+                session_repository.add_session_logs(session_id, batch)
+
             await websocket.send_json({"session_id": session_id, **payload})
     except WebSocketDisconnect:
         session_manager.mark_finished(session_id)
