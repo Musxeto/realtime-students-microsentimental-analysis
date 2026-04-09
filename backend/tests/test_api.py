@@ -48,6 +48,15 @@ def test_login_success(client):
     assert body["models_loaded"] is True
 
 
+def test_login_with_username_field(client):
+    res = client.post(
+        "/auth/login",
+        json={"username": "admin@fyp.com", "password": "admin123"},
+    )
+    assert res.status_code == 200
+    assert res.json()["user"]["email"] == "admin@fyp.com"
+
+
 def test_admin_teacher_provisioning_rbac(client):
     teacher_token = _login(client, "teacher@fyp.com", "teacher123")
     admin_token = _login(client, "admin@fyp.com", "admin123")

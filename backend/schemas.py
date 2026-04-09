@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field
 
 
 class TokenResponse(BaseModel):
@@ -13,7 +13,7 @@ class TokenResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: EmailStr = Field(validation_alias=AliasChoices("email", "username"))
     password: str = Field(min_length=1)
 
 
