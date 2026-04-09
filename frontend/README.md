@@ -73,9 +73,20 @@ Route protection is role-based in src/features/auth/ProtectedRoute.tsx.
 
 - Session is created via backend REST endpoint.
 - Frontend opens WebSocket connection to /sessions/ws/stream/{session_id}.
-- Incoming payload updates engagement visualizations and live indicators.
+- Incoming payload updates engagement visualizations, alert-state cards, and runtime indicators.
+
+## Implemented Dashboard Features
+
+- Role-based login redirect (admin to /admin, teacher to /dashboard)
+- Admin teacher lifecycle controls (create, activate/deactivate)
+- Admin course allocation (create/delete)
+- Per-course alert configuration controls (threshold, duration, enabled)
+- Teacher course analytics cards and lecture history table
+- Session start flow with course/video selection and frame-step control
+- Live session charts with engagement timeline, websocket status, and runtime metrics
 
 ## Build Notes
 
 - Production build currently succeeds.
-- Tremor charts increase bundle size; route-level code splitting can be added if needed.
+- Route-level lazy loading is enabled for dashboard pages.
+- Tremor-heavy live session chart chunk remains the largest asset and can be further split if needed.

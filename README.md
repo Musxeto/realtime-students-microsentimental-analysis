@@ -158,10 +158,22 @@ Role behavior:
 - GET /health
 - POST /auth/login
 - GET /courses
+- POST /courses
+- DELETE /courses/{course_id}
+- GET /courses/{course_id}/analytics
+- GET /courses/{course_id}/alert-config
+- PUT /courses/{course_id}/alert-config
 - POST /sessions/start
+- GET /sessions
+- GET /sessions/{session_id}
+- GET /sessions/{session_id}/logs
+- GET /sessions/{session_id}/metrics
 - POST /sessions/{session_id}/end
 - WS /sessions/ws/stream/{session_id}
 - POST /admin/teachers
+- GET /admin/teachers
+- PATCH /admin/teachers/{teacher_id}
+- GET /admin/teachers/{teacher_id}/analytics
 
 Swagger docs:
 
@@ -173,10 +185,10 @@ First startup seeds sample users and courses.
 
 Typical credentials:
 
-- admin@fyp.com / password123
-- teacher@fyp.com / password123
-- teacher2@fyp.com / password123
-- teacher3@fyp.com / password123
+- admin@fyp.com / admin123
+- teacher@fyp.com / teacher123
+- teacher2@fyp.com / teacher123
+- teacher3@fyp.com / teacher123
 
 If these are changed in seed scripts, trust the current seed source in [backend/bootstrap.py](backend/bootstrap.py).
 
@@ -255,9 +267,9 @@ npm run build
 
 ## Project Status
 
-- Backend core auth, RBAC, sessions, and streaming are implemented.
-- Frontend foundation and role-based shell are in place.
-- Live UI analytics and admin/teacher feature screens are scaffolded and ready for endpoint wiring.
+- Backend auth, RBAC, admin workflows, course analytics, alert configuration, session metrics, and websocket streaming are implemented.
+- Frontend has role-based login redirects, working admin and teacher dashboards, live session runtime controls, and realtime engagement/alert views.
+- Backend API tests and frontend production build pass on current branch.
 
 ---
 
