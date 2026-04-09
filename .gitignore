@@ -4,3 +4,5 @@ master_dataset/
 .github/
 .venv/
 __pycache__/
+.pytest_cache/
+backend/app.db
