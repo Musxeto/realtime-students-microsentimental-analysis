@@ -11,11 +11,8 @@ from ultralytics import YOLO
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 AI_DIR = Path(__file__).resolve().parents[1]
-DEFAULT_PERSON_MODEL = AI_DIR / "yolo11n.onnx"
 DEFAULT_BEHAVIOR_MODEL = AI_DIR / "fyp_runs" / "classroom_model_v2" / "weights" / "best.onnx"
 DEFAULT_BEHAVIOR_IMGSZ = 416
-DEFAULT_DETECT_INTERVAL = 8
-DEFAULT_CLASSIFY_INTERVAL = 10
 
 
 def resolve_person_model(ai_dir: Path) -> Path:
@@ -110,19 +107,6 @@ def iou_xyxy(a, b) -> float:
     return 0.0 if union <= 0 else inter / union
 
 
-def find_best_previous_match(box: list[int], previous: list[dict], iou_thr: float = 0.55):
-    best = None
-    best_iou = 0.0
-    for det in previous:
-        iou = iou_xyxy(box, det["box"])
-        if iou > best_iou:
-            best_iou = iou
-            best = det
-    if best is not None and best_iou >= iou_thr:
-        return best
-    return None
-
-
 def nms_person(dets: list[tuple[float, float, float, float, float]], thr: float = 0.45):
     if not dets:
         return []
@@ -185,69 +169,15 @@ def run_stage1(person_finder: YOLO, frame: np.ndarray, person_conf: float, imgsz
     return merge_vertical_fragments(raw_boxes), raw_count
 
 
-def run_stage2(
+def run_single_stage(
     behavior_classifier: YOLO,
     frame: np.ndarray,
-    merged_boxes: list[list[int]],
     behavior_conf: float,
     behavior_imgsz: int,
-    frame_index: int,
-    classify_interval: int,
-    previous_detections: list[dict] | None = None,
 ):
     h, w = frame.shape[:2]
     detections = []
-    batched_crops = []
-    batched_meta = []
     runtime_behavior_imgsz = behavior_imgsz
-    previous_detections = previous_detections or []
-
-    for idx, (x1, y1, x2, y2) in enumerate(merged_boxes, start=1):
-        x1, y1, x2, y2 = clip_box(x1, y1, x2, y2, w, h)
-        if x2 <= x1 or y2 <= y1:
-            continue
-
-        pad = 20
-        px1 = max(0, x1 - pad)
-        py1 = max(0, y1 - pad)
-        px2 = min(w, x2 + pad)
-        py2 = min(h, y2 + pad)
-
-        person_crop = frame[py1:py2, px1:px2]
-        if person_crop.size == 0 or person_crop.shape[0] < 12 or person_crop.shape[1] < 12:
-            detections.append(
-                {
-                    "person_index": idx,
-                    "box": [x1, y1, x2, y2],
-                    "label": "unknown",
-                    "confidence": 0.0,
-                    "status": "crop_too_small",
-                }
-            )
-            continue
-
-        can_reuse = classify_interval > 1 and (frame_index % classify_interval != 0)
-        if can_reuse:
-            prev = find_best_previous_match([x1, y1, x2, y2], previous_detections, iou_thr=0.55)
-            if prev is not None and prev.get("label") != "unknown":
-                detections.append(
-                    {
-                        "person_index": idx,
-                        "box": [x1, y1, x2, y2],
-                        "label": prev.get("label", "unknown"),
-                        "confidence": float(prev.get("confidence", 0.0)),
-                        "status": "cached",
-                    }
-                )
-                continue
-
-        batched_crops.append(person_crop)
-        batched_meta.append((idx, x1, y1, x2, y2))
-
-    if not batched_crops:
-        return detections
-
-    behavior_pairs: list[tuple[tuple[int, int, int, int, int], object]] = []
 
     def _predict_behavior(source):
         nonlocal runtime_behavior_imgsz
@@ -262,10 +192,6 @@ def run_stage2(
             )
         except Exception as exc:
             msg = str(exc)
-
-            # Fixed-batch ONNX models fail on list input (batch > 1). Let caller fallback to per-crop inference.
-            if isinstance(source, list) and "index: 0" in msg and "Expected: 1" in msg:
-                raise
 
             # Fixed-shape ONNX models can require a specific spatial size. Auto-adjust imgsz from error text.
             if "INVALID_ARGUMENT" in msg and "Expected:" in msg:
@@ -292,40 +218,30 @@ def run_stage2(
                 )
             raise
 
-    try:
-        # Fast path: one batched inference call per frame.
-        behavior_results = _predict_behavior(batched_crops)
+    behavior_results = _predict_behavior(frame)
+    if not behavior_results:
+        return detections
 
-        if not isinstance(behavior_results, list):
-            behavior_results = [behavior_results]
+    res = behavior_results[0]
+    if res.boxes is None or len(res.boxes) == 0:
+        return detections
 
-        behavior_pairs = list(zip(batched_meta, behavior_results))
-    except Exception:
-        # Some ONNX exports are fixed at batch=1; fallback keeps compatibility.
-        for meta, crop in zip(batched_meta, batched_crops):
-            single_res = _predict_behavior(crop)
-            behavior_pairs.append((meta, single_res[0]))
-
-    for (idx, x1, y1, x2, y2), behavior_res in behavior_pairs:
-        label = "unknown"
-        bconf = 0.0
-
-        if behavior_res and behavior_res.boxes is not None and len(behavior_res.boxes) > 0:
-            b = behavior_res.boxes
-            best_idx = int(np.argmax(b.conf.cpu().numpy()))
-            cls_id = int(b.cls[best_idx].item())
-            bconf = float(b.conf[best_idx].item())
-            names = behavior_classifier.names
-            label = names.get(cls_id, str(cls_id)) if isinstance(names, dict) else names[cls_id]
-
-        record = {
-            "person_index": idx,
-            "box": [x1, y1, x2, y2],
-            "label": label,
-            "confidence": round(bconf, 4),
-            "status": "classified" if label != "unknown" else "unclassified",
-        }
-        detections.append(record)
+    names = behavior_classifier.names
+    for idx, box in enumerate(res.boxes, start=1):
+        x1, y1, x2, y2 = map(int, box.xyxy[0])
+        x1, y1, x2, y2 = clip_box(x1, y1, x2, y2, w, h)
+        cls_id = int(box.cls[0].item())
+        bconf = float(box.conf[0].item())
+        label = names.get(cls_id, str(cls_id)) if isinstance(names, dict) else names[cls_id]
+        detections.append(
+            {
+                "person_index": idx,
+                "box": [x1, y1, x2, y2],
+                "label": label,
+                "confidence": round(bconf, 4),
+                "status": "classified",
+            }
+        )
 
     return detections
 
@@ -355,23 +271,17 @@ def draw_detections(frame: np.ndarray, detections: list[dict], draw_diagnostic_r
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Two-stage classroom behavior pipeline on video")
+    parser = argparse.ArgumentParser(description="Single-stage classroom behavior pipeline on video (best.onnx only)")
     parser.add_argument(
         "video",
         nargs="?",
         default=str(SCRIPT_DIR / "test_video2.mp4"),
         help="Path to input .mp4/.mov/.avi/.mkv video",
     )
-    parser.add_argument("--person-model", default=str(DEFAULT_PERSON_MODEL), help="Path to person detector model (.onnx or .pt)")
     parser.add_argument("--behavior-model", default=str(DEFAULT_BEHAVIOR_MODEL), help="Path to behavior classifier model (.onnx or .pt)")
     parser.add_argument("--frame-step", type=int, default=1, help="Process every Nth frame (1 = all frames)")
-    parser.add_argument("--person-conf", type=float, default=0.3, help="Confidence threshold for person detector")
     parser.add_argument("--behavior-conf", type=float, default=0.1, help="Confidence threshold for behavior classifier")
     parser.add_argument("--behavior-imgsz", type=int, default=DEFAULT_BEHAVIOR_IMGSZ, help="Inference size for behavior classifier (lower = faster when model supports dynamic shapes)")
-    parser.add_argument("--detect-interval", type=int, default=DEFAULT_DETECT_INTERVAL, help="Run Stage 1 detector every N frames (still renders every frame)")
-    parser.add_argument("--classify-interval", type=int, default=DEFAULT_CLASSIFY_INTERVAL, help="Re-run Stage 2 every N frames (still processes all frames)")
-    parser.add_argument("--imgsz", type=int, default=640, help="Inference size for person detector")
-    parser.add_argument("--max-det", type=int, default=500, help="Max person detections")
     parser.add_argument("--output-json", help="Path to save the JSON summary")
     parser.add_argument("--show", action="store_true", default=True, help="Show real-time OpenCV preview with boxes")
     parser.add_argument("--window-name", default="Two-Stage Pipeline (Video)", help="OpenCV window title")
@@ -386,18 +296,12 @@ def main():
     ai_dir = Path(__file__).resolve().parents[1]
 
     video_path = resolve_video_path(ai_dir, args.video, script_dir)
-    person_model_path = Path(args.person_model) if args.person_model else resolve_person_model(ai_dir)
     behavior_model_path = Path(args.behavior_model) if args.behavior_model else resolve_behavior_model(ai_dir)
 
     print(f"Video: {video_path}")
-    print(f"Person model: {person_model_path}")
     print(f"Behavior model: {behavior_model_path}")
 
-    if person_model_path.suffix.lower() != ".onnx":
-        print("WARNING Person model is not ONNX. This usually runs on CPU and can be much slower on AMD GPUs.")
-        print("Tip: export person model to ONNX and rerun with --person-model <path_to_onnx>.")
-
-    if args.show_providers and (person_model_path.suffix.lower() == ".onnx" or behavior_model_path.suffix.lower() == ".onnx"):
+    if args.show_providers and behavior_model_path.suffix.lower() == ".onnx":
         try:
             import onnxruntime as ort
 
@@ -409,17 +313,10 @@ def main():
     if args.frame_step < 1:
         raise ValueError("--frame-step must be at least 1")
 
-    if args.classify_interval < 1:
-        raise ValueError("--classify-interval must be at least 1")
-
-    if args.detect_interval < 1:
-        raise ValueError("--detect-interval must be at least 1")
-
     if not video_path.exists():
         raise FileNotFoundError(f"Could not find video: {video_path}")
 
-    print("Loading models...")
-    person_finder = YOLO(str(person_model_path))
+    print("Loading model...")
     behavior_classifier = YOLO(str(behavior_model_path))
 
     cap = cv2.VideoCapture(str(video_path))
@@ -455,8 +352,6 @@ def main():
     frame_results = []
     frame_level_counts: defaultdict[str, int] = defaultdict(int)
     last_detections: list[dict] = []
-    previous_processed_detections: list[dict] = []
-    previous_merged_boxes: list[list[int]] = []
 
     print("Processing video frames...")
     while True:
@@ -471,27 +366,14 @@ def main():
             sampled_frames += 1
             processed_frames += 1
 
-            rerun_stage1 = (frame_index % args.detect_interval == 0) or not previous_merged_boxes
-            if rerun_stage1:
-                merged_boxes, raw_count = run_stage1(person_finder, frame, args.person_conf, args.imgsz, args.max_det)
-                previous_merged_boxes = merged_boxes
-            else:
-                merged_boxes = previous_merged_boxes
-                raw_count = len(merged_boxes)
-
-            detections = run_stage2(
+            detections = run_single_stage(
                 behavior_classifier,
                 frame,
-                merged_boxes,
                 args.behavior_conf,
                 args.behavior_imgsz,
-                frame_index,
-                args.classify_interval,
-                previous_processed_detections,
             )
             last_detections = detections
-            previous_processed_detections = detections
-            render_frame = draw_detections(render_frame, detections, draw_diagnostic_red=True)
+            render_frame = draw_detections(render_frame, detections, draw_diagnostic_red=False)
 
             timestamp_sec = (frame_index / fps) if fps > 0 else None
             labeled_detections = [d for d in detections if d["label"] != "unknown"]
@@ -505,9 +387,7 @@ def main():
                 {
                     "frame_index": frame_index,
                     "timestamp_sec": round(timestamp_sec, 3) if timestamp_sec is not None else None,
-                    "raw_stage1_boxes": raw_count,
-                    "merged_stage1_boxes": len(merged_boxes),
-                    "stage1_rerun": rerun_stage1,
+                    "behavior_boxes": len(detections),
                     "classifications": detections,
                     "classified_count": len(labeled_detections),
                     "unknown_count": len(detections) - len(labeled_detections),
@@ -515,7 +395,7 @@ def main():
             )
 
             print(
-                f"Frame {frame_index}: Stage1={len(merged_boxes)} people, "
+                f"Frame {frame_index}: detected={len(detections)}, "
                 f"classified={len(labeled_detections)}, unknown={len(detections) - len(labeled_detections)}"
             )
         elif last_detections:
