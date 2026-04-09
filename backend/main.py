@@ -5,7 +5,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from .bootstrap import ensure_seed_data
-from .database import Base, engine
+from .database import engine
+from .migrations import upgrade_to_head
 from .models import ClassSession, Course, SessionLog, User
 from .routes.auth import router as auth_router
 from .routes.courses import router as courses_router
@@ -21,7 +22,7 @@ app.include_router(sessions_router)
 
 @app.on_event("startup")
 def startup_event():
-    Base.metadata.create_all(bind=engine)
+    upgrade_to_head()
 
     with Session(bind=engine) as db:
         ensure_seed_data(db)

@@ -3,8 +3,8 @@ services:
     image: postgres:15
     environment:
       POSTGRES_DB: fyp
-      POSTGRES_USER: fyp
-      POSTGRES_PASSWORD: fyp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
     ports:
       - "5432:5432"
     volumes:
@@ -15,7 +15,7 @@ services:
     depends_on:
       - db
     environment:
-      DATABASE_URL: postgresql+psycopg2://fyp:fyp@db:5432/fyp
+      DATABASE_URL: postgresql+psycopg2://postgres:1234@db:5432/fyp
       SECRET_KEY: change-me
       AI_DIR: /app/ai
       VIDEO_ROOT: /app/ai
