@@ -22,20 +22,20 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-20 border-b bg-white/80 backdrop-blur">
+      <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/75 backdrop-blur-lg">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <Link to="/" className="flex items-center gap-2 text-slate-900">
-            <BarChart3 className="size-5 text-indigo-600" />
-            <span className="text-sm font-semibold tracking-wide">ClassPulse Analytics</span>
+            <BarChart3 className="size-5 text-primary" />
+            <span className="text-sm font-semibold tracking-wide">ClassPulse Command Center</span>
           </Link>
           <div className="flex items-center gap-3">
-            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium uppercase text-indigo-700">
+            <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium uppercase text-primary">
               {role ?? 'guest'}
             </span>
             <button
               type="button"
               onClick={onLogout}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-white"
             >
               Logout
             </button>
@@ -44,7 +44,7 @@ export function AppLayout() {
       </header>
 
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[230px_1fr]">
-        <aside className="rounded-xl border bg-white p-3 shadow-card">
+        <aside className="panel-glow fade-in-up rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-card">
           <nav className="space-y-1">
             {visibleItems.map(({ to, label, icon: Icon }) => (
               <NavLink
@@ -54,8 +54,8 @@ export function AppLayout() {
                   [
                     'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                     isActive
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-slate-700 hover:bg-slate-100',
+                      ? 'bg-primary text-white'
+                      : 'text-slate-700 hover:bg-primary/5',
                   ].join(' ')
                 }
               >
@@ -66,7 +66,7 @@ export function AppLayout() {
           </nav>
         </aside>
 
-        <main>
+        <main className="fade-in-up">
           <Outlet />
         </main>
       </div>

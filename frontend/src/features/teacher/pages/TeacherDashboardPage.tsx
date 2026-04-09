@@ -2,10 +2,14 @@ import { Link } from 'react-router-dom'
 import { useGetCourseAnalyticsQuery, useGetCoursesQuery, useGetSessionsQuery } from '../../../services/api/apiSlice'
 
 function CourseAnalyticsCard({ courseId, courseName }: { courseId: number; courseName: string }) {
-  const { data, isLoading } = useGetCourseAnalyticsQuery(courseId)
+  const { data, isLoading, isError } = useGetCourseAnalyticsQuery(courseId)
 
   if (isLoading) {
     return <div className="rounded-xl border bg-white p-4 text-sm text-slate-500 shadow-card">Loading analytics...</div>
+  }
+
+  if (isError) {
+    return <div className="rounded-xl border bg-white p-4 text-sm text-danger shadow-card">Analytics unavailable.</div>
   }
 
   return (
@@ -18,13 +22,14 @@ function CourseAnalyticsCard({ courseId, courseName }: { courseId: number; cours
 }
 
 export function TeacherDashboardPage() {
-  const { data: courses = [], isLoading: isCoursesLoading } = useGetCoursesQuery()
-  const { data: sessions } = useGetSessionsQuery({ limit: 20, offset: 0 })
+  const { data: courses = [], isLoading: isCoursesLoading, isError: isCoursesError } = useGetCoursesQuery()
+  const { data: sessions, isLoading: sessionsLoading, isError: sessionsError } = useGetSessionsQuery({ limit: 20, offset: 0 })
 
   return (
     <section className="space-y-4">
       <h1 className="text-2xl font-semibold text-slate-900">Teacher Dashboard</h1>
       <p className="text-sm text-slate-600">Assigned courses, lecture analytics, and recent session history.</p>
+      {isCoursesError || sessionsError ? <p className="rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-sm text-danger">Some dashboard data failed to load.</p> : null}
 
       <div className="rounded-xl border bg-white p-4 shadow-card">
         <div className="flex items-center justify-between">
@@ -49,6 +54,7 @@ export function TeacherDashboardPage() {
 
       <div className="rounded-xl border bg-white p-4 shadow-card">
         <h2 className="text-lg font-semibold text-slate-900">Recent Lectures</h2>
+        {sessionsLoading ? <p className="mt-2 text-sm text-slate-500">Loading sessions...</p> : null}
         <div className="mt-3 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="border-b text-slate-500">
@@ -62,12 +68,23 @@ export function TeacherDashboardPage() {
             <tbody>
               {(sessions?.items ?? []).map((session) => (
                 <tr key={session.id} className="border-b border-slate-100">
-                  <td className="py-2 pr-4">#{session.id}</td>
+                  <td className="py-2 pr-4">
+                    <Link className="text-primary hover:underline" to={`/session/${session.id}`}>
+                      #{session.id}
+                    </Link>
+                  </td>
                   <td className="py-2 pr-4">{session.course_id}</td>
                   <td className="py-2 pr-4">{session.status}</td>
                   <td className="py-2 pr-4">{session.final_avg_score == null ? '-' : `${Math.round(session.final_avg_score)}%`}</td>
                 </tr>
               ))}
+              {!sessionsLoading && (sessions?.items?.length ?? 0) === 0 ? (
+                <tr>
+                  <td className="py-4 text-sm text-slate-500" colSpan={4}>
+                    No lectures yet. Start a live session to begin collecting analytics.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>

@@ -1,21 +1,24 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   useCreateCourseMutation,
   useCreateTeacherMutation,
   useDeleteCourseMutation,
+  useGetAlertConfigQuery,
   useGetCoursesQuery,
   useGetTeachersQuery,
+  useUpdateAlertConfigMutation,
   useUpdateTeacherMutation,
 } from '../../../services/api/apiSlice'
 
 export function AdminDashboardPage() {
-  const { data: teachers = [], isLoading: teachersLoading } = useGetTeachersQuery()
-  const { data: courses = [] } = useGetCoursesQuery()
+  const { data: teachers = [], isLoading: teachersLoading, isError: teachersError } = useGetTeachersQuery()
+  const { data: courses = [], isError: coursesError } = useGetCoursesQuery()
   const [createTeacher, { isLoading: creatingTeacher }] = useCreateTeacherMutation()
   const [updateTeacher] = useUpdateTeacherMutation()
   const [createCourse] = useCreateCourseMutation()
   const [deleteCourse] = useDeleteCourseMutation()
+  const [updateAlertConfig] = useUpdateAlertConfigMutation()
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -25,6 +28,30 @@ export function AdminDashboardPage() {
   const [newCourseName, setNewCourseName] = useState('')
   const [instructorId, setInstructorId] = useState<number | null>(null)
 
+  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null)
+  const { data: selectedAlertConfig } = useGetAlertConfigQuery(selectedCourseId ?? 0, {
+    skip: selectedCourseId == null,
+  })
+  const [alertThreshold, setAlertThreshold] = useState(50)
+  const [alertDuration, setAlertDuration] = useState(180)
+  const [alertEnabled, setAlertEnabled] = useState(true)
+  const [feedback, setFeedback] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!selectedCourseId && courses.length > 0) {
+      setSelectedCourseId(courses[0].id)
+    }
+  }, [courses, selectedCourseId])
+
+  useEffect(() => {
+    if (!selectedAlertConfig) {
+      return
+    }
+    setAlertThreshold(selectedAlertConfig.engagement_threshold)
+    setAlertDuration(selectedAlertConfig.duration_seconds)
+    setAlertEnabled(selectedAlertConfig.enabled)
+  }, [selectedAlertConfig])
+
   async function handleCreateTeacher(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const parsedCourses = courseNames
@@ -32,17 +59,22 @@ export function AdminDashboardPage() {
       .map((item) => item.trim())
       .filter(Boolean)
 
-    await createTeacher({
-      name,
-      email,
-      password,
-      course_names: parsedCourses,
-    }).unwrap()
+    try {
+      await createTeacher({
+        name,
+        email,
+        password,
+        course_names: parsedCourses,
+      }).unwrap()
 
-    setName('')
-    setEmail('')
-    setPassword('')
-    setCourseNames('')
+      setName('')
+      setEmail('')
+      setPassword('')
+      setCourseNames('')
+      setFeedback('Teacher created successfully.')
+    } catch {
+      setFeedback('Could not create teacher. Check form values or duplicate email.')
+    }
   }
 
   async function handleCreateCourse(event: FormEvent<HTMLFormElement>) {
@@ -51,28 +83,66 @@ export function AdminDashboardPage() {
       return
     }
 
-    await createCourse({
-      course_name: newCourseName,
-      instructor_id: instructorId,
-    }).unwrap()
+    try {
+      await createCourse({
+        course_name: newCourseName,
+        instructor_id: instructorId,
+      }).unwrap()
 
-    setNewCourseName('')
+      setNewCourseName('')
+      setFeedback('Course created and assigned successfully.')
+    } catch {
+      setFeedback('Could not create course.')
+    }
   }
 
   async function toggleTeacherStatus(teacherId: number, current: boolean) {
-    await updateTeacher({
-      teacherId,
-      payload: { is_active: !current },
-    }).unwrap()
+    try {
+      await updateTeacher({
+        teacherId,
+        payload: { is_active: !current },
+      }).unwrap()
+      setFeedback('Teacher status updated.')
+    } catch {
+      setFeedback('Could not update teacher status.')
+    }
   }
 
   async function handleDeleteCourse(courseId: number) {
-    await deleteCourse(courseId).unwrap()
+    try {
+      await deleteCourse(courseId).unwrap()
+      setFeedback('Course deleted.')
+    } catch {
+      setFeedback('Could not delete course.')
+    }
+  }
+
+  async function handleAlertConfigSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedCourseId) {
+      return
+    }
+
+    try {
+      await updateAlertConfig({
+        courseId: selectedCourseId,
+        payload: {
+          engagement_threshold: alertThreshold,
+          duration_seconds: alertDuration,
+          enabled: alertEnabled,
+        },
+      }).unwrap()
+      setFeedback('Alert config updated.')
+    } catch {
+      setFeedback('Could not update alert config.')
+    }
   }
 
   return (
     <section className="space-y-6">
       <h1 className="text-2xl font-semibold text-slate-900">Admin Dashboard</h1>
+      {feedback ? <p className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-primary">{feedback}</p> : null}
+      {teachersError || coursesError ? <p className="rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-sm text-danger">Some data failed to load. Refresh and try again.</p> : null}
 
       <div className="grid gap-6 xl:grid-cols-2">
         <form onSubmit={handleCreateTeacher} className="space-y-3 rounded-xl border bg-white p-4 shadow-card">
@@ -219,6 +289,52 @@ export function AdminDashboardPage() {
           </table>
         </div>
       </div>
+
+      <form onSubmit={handleAlertConfigSubmit} className="space-y-3 rounded-xl border bg-white p-4 shadow-card">
+        <h2 className="text-lg font-semibold text-slate-900">Course Alert Configuration</h2>
+        <select
+          className="w-full rounded-lg border px-3 py-2 text-sm"
+          value={selectedCourseId ?? ''}
+          onChange={(event) => setSelectedCourseId(Number(event.target.value))}
+        >
+          {courses.map((course) => (
+            <option key={course.id} value={course.id}>
+              {course.course_name}
+            </option>
+          ))}
+        </select>
+        <div className="grid gap-3 md:grid-cols-3">
+          <input
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            type="number"
+            min={0}
+            max={100}
+            value={alertThreshold}
+            onChange={(event) => setAlertThreshold(Number(event.target.value))}
+            placeholder="Threshold %"
+          />
+          <input
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            type="number"
+            min={0}
+            max={3600}
+            value={alertDuration}
+            onChange={(event) => setAlertDuration(Number(event.target.value))}
+            placeholder="Duration seconds"
+          />
+          <label className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+            <input
+              type="checkbox"
+              checked={alertEnabled}
+              onChange={(event) => setAlertEnabled(event.target.checked)}
+            />
+            Alert enabled
+          </label>
+        </div>
+        <button type="submit" className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90">
+          Save Alert Config
+        </button>
+      </form>
     </section>
   )
 }
