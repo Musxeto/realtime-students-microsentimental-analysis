@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+import asyncio
 
 
 @dataclass
@@ -19,6 +20,8 @@ class LiveSessionState:
     engagement_count: int = 0
     peak_distracted_count: int = 0
     peak_distracted_timestamp: float | None = None
+    disconnected_at: datetime | None = None
+    timeout_task: asyncio.Task | None = None
 
 
 class SessionManager:
@@ -36,6 +39,34 @@ class SessionManager:
     def mark_finished(self, session_id: int):
         if session_id in self._sessions:
             self._sessions[session_id].active = False
+            state = self._sessions[session_id]
+            if state.timeout_task and not state.timeout_task.done():
+                state.timeout_task.cancel()
+
+    def mark_paused(self, session_id: int):
+        state = self._sessions.get(session_id)
+        if state is None:
+            return
+        state.active = False
+        state.disconnected_at = datetime.utcnow()
+
+    def mark_running(self, session_id: int):
+        state = self._sessions.get(session_id)
+        if state is None:
+            return
+        state.active = True
+        state.disconnected_at = None
+        if state.timeout_task and not state.timeout_task.done():
+            state.timeout_task.cancel()
+        state.timeout_task = None
+
+    def attach_timeout_task(self, session_id: int, task: asyncio.Task):
+        state = self._sessions.get(session_id)
+        if state is None:
+            return
+        if state.timeout_task and not state.timeout_task.done():
+            state.timeout_task.cancel()
+        state.timeout_task = task
 
     def consume_frame_payload(self, session_id: int, payload: dict) -> None:
         state = self._sessions.get(session_id)
