@@ -28,6 +28,7 @@ class _MockStream:
 def _login(client, email: str, password: str) -> str:
     res = client.post("/auth/login", json={"email": email, "password": password})
     assert res.status_code == 200
+    assert res.json()["user"]["email"] == email
     return res.json()["access_token"]
 
 
@@ -35,16 +36,23 @@ def test_login_success(client):
     token = _login(client, "teacher@fyp.com", "teacher123")
     assert token
 
+    health = client.get("/health")
+    assert health.status_code == 200
+    body = health.json()
+    assert body["status"] == "ok"
+    assert body["db_connected"] is True
+    assert body["models_loaded"] is True
+
 
 def test_admin_teacher_provisioning_rbac(client):
     teacher_token = _login(client, "teacher@fyp.com", "teacher123")
     admin_token = _login(client, "admin@fyp.com", "admin123")
 
     payload = {
-        "name": "Teacher Two",
-        "email": "teacher2@fyp.com",
+        "name": "Teacher New",
+        "email": "teacher_new@fyp.com",
         "password": "1234",
-        "course_names": ["Classroom C"],
+        "course_names": ["Classroom Z"],
     }
 
     teacher_attempt = client.post(
@@ -61,7 +69,7 @@ def test_admin_teacher_provisioning_rbac(client):
     )
     assert admin_attempt.status_code == 200
     body = admin_attempt.json()
-    assert body["teacher"]["email"] == "teacher2@fyp.com"
+    assert body["teacher"]["email"] == "teacher_new@fyp.com"
     assert len(body["courses"]) == 1
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    user: Optional["UserOut"] = None
 
 
 class LoginRequest(BaseModel):
