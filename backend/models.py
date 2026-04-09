@@ -61,6 +61,8 @@ class ClassSession(Base):
 
     course = relationship("Course", back_populates="sessions")
     logs = relationship("SessionLog", back_populates="session", cascade="all, delete-orphan")
+    alert_events = relationship("AlertEvent", back_populates="session", cascade="all, delete-orphan")
+    performance_metrics = relationship("PerformanceMetric", back_populates="session", cascade="all, delete-orphan")
 
 
 class SessionLog(Base):
@@ -75,3 +77,39 @@ class SessionLog(Base):
     payload = Column(JSON, nullable=True)
 
     session = relationship("ClassSession", back_populates="logs")
+
+
+class AlertConfig(Base):
+    __tablename__ = "alert_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=False, unique=True)
+    engagement_threshold = Column(Float, nullable=False, default=50.0)
+    duration_seconds = Column(Integer, nullable=False, default=180)
+    enabled = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class AlertEvent(Base):
+    __tablename__ = "alert_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=False)
+    triggered_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    engagement_at_trigger = Column(Float, nullable=False)
+    reason = Column(Text, nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
+
+    session = relationship("ClassSession", back_populates="alert_events")
+
+
+class PerformanceMetric(Base):
+    __tablename__ = "performance_metrics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=False)
+    metric_type = Column(String(50), nullable=False)
+    value = Column(Float, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    session = relationship("ClassSession", back_populates="performance_metrics")

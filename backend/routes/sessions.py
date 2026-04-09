@@ -6,6 +6,7 @@ import asyncio
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ai.inference_utils import resolve_video_path
@@ -13,8 +14,8 @@ from ai.inference_utils import resolve_video_path
 from ..config import settings
 from ..database import SessionLocal, get_db
 from ..deps import get_current_user
-from ..models import ClassSession, Course, SessionLog, SessionStatus, User, UserRole
-from ..schemas import EndSessionResponse, SessionListResponse, SessionLogsResponse, SessionLogOut, SessionOut, StartSessionRequest, StartSessionResponse
+from ..models import AlertConfig, AlertEvent, ClassSession, Course, PerformanceMetric, SessionLog, SessionStatus, User, UserRole
+from ..schemas import EndSessionResponse, SessionListResponse, SessionLogsResponse, SessionLogOut, SessionMetricsResponse, SessionOut, StartSessionRequest, StartSessionResponse
 from ..services.database import session_repository
 from ..services.inference_service import inference_service
 from ..services.session_manager import session_manager
@@ -42,6 +43,17 @@ def _to_session_out(session: ClassSession) -> SessionOut:
     )
 
 
+def _load_alert_config(db: Session, course_id: int) -> dict:
+    config = db.query(AlertConfig).filter(AlertConfig.course_id == course_id).first()
+    if config is None:
+        return {"engagement_threshold": 50.0, "duration_seconds": 180, "enabled": True}
+    return {
+        "engagement_threshold": float(config.engagement_threshold),
+        "duration_seconds": int(config.duration_seconds),
+        "enabled": bool(config.enabled),
+    }
+
+
 async def _auto_complete_if_disconnected(session_id: int):
     await asyncio.sleep(settings.session_disconnect_timeout_seconds)
 
@@ -52,6 +64,9 @@ async def _auto_complete_if_disconnected(session_id: int):
     pending_logs = session_manager.drain_log_buffer(session_id)
     if pending_logs:
         session_repository.add_session_logs(session_id, pending_logs)
+    pending_metrics = session_manager.drain_performance_buffer(session_id)
+    if pending_metrics:
+        session_repository.add_performance_metrics(session_id, pending_metrics)
     summary = session_manager.final_summary(session_id)
     final_avg_score = float(summary.get("avg_engagement_score", 0.0))
 
@@ -176,6 +191,9 @@ def end_session(session_id: int, current_user: User = Depends(get_current_user),
     pending_logs = session_manager.drain_log_buffer(session_id)
     if pending_logs:
         session_repository.add_session_logs(session_id, pending_logs)
+    pending_metrics = session_manager.drain_performance_buffer(session_id)
+    if pending_metrics:
+        session_repository.add_performance_metrics(session_id, pending_metrics)
 
     summary = session_manager.final_summary(session_id)
     final_avg_score = float(summary.get("avg_engagement_score", 0.0))
@@ -214,16 +232,40 @@ async def stream_session(websocket: WebSocket, session_id: int):
 
     session_manager.mark_running(session_id)
 
+    with SessionLocal() as db:
+        course = db.query(Course).filter(Course.id == state.course_id).first()
+        if course is not None:
+            alert_config = _load_alert_config(db, course.id)
+            session_manager.set_alert_config(
+                session_id,
+                threshold=alert_config["engagement_threshold"],
+                duration_seconds=alert_config["duration_seconds"],
+                enabled=alert_config["enabled"],
+            )
+
     try:
         async for payload in inference_service.stream_video(state.video_path, frame_step=state.frame_step):
-            session_manager.consume_frame_payload(session_id, payload)
+            alert_state = session_manager.consume_frame_payload(session_id, payload)
 
             state = session_manager.get(session_id)
             if state and len(state.log_buffer) >= settings.session_log_batch_size:
                 batch = session_manager.drain_log_buffer(session_id)
                 session_repository.add_session_logs(session_id, batch)
 
-            await websocket.send_json({"session_id": session_id, **payload})
+            state = session_manager.get(session_id)
+            if state and len(state.performance_buffer) >= settings.session_log_batch_size:
+                metrics_batch = session_manager.drain_performance_buffer(session_id)
+                session_repository.add_performance_metrics(session_id, metrics_batch)
+
+            if state and alert_state and alert_state.get("active") and state.alert_event_open:
+                session_repository.add_alert_event(
+                    session_id,
+                    engagement_at_trigger=float(payload.get("engagement_score", 0.0)),
+                    reason=alert_state.get("reason", "Low engagement detected"),
+                )
+                state.alert_event_open = False
+
+            await websocket.send_json({"session_id": session_id, "alert_state": alert_state, **payload})
     except WebSocketDisconnect:
         session_manager.mark_paused(session_id)
         with SessionLocal() as db:
@@ -237,3 +279,50 @@ async def stream_session(websocket: WebSocket, session_id: int):
     finally:
         if websocket.client_state.name != "DISCONNECTED":
             await websocket.close()
+
+
+@router.get("/{session_id}/metrics", response_model=SessionMetricsResponse)
+def get_session_metrics(session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    session_query = _apply_role_scope(db.query(ClassSession), current_user)
+    session = session_query.filter(ClassSession.id == session_id).first()
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    latencies = [row[0] for row in db.query(PerformanceMetric.value).filter(PerformanceMetric.session_id == session_id, PerformanceMetric.metric_type == "processing_latency_ms").all()]
+    alert_count = db.query(func.count(AlertEvent.id)).filter(AlertEvent.session_id == session_id).scalar() or 0
+    logs = db.query(SessionLog).filter(SessionLog.session_id == session_id).order_by(SessionLog.timestamp.asc()).all()
+
+    if latencies:
+        avg_latency = round(sum(latencies) / len(latencies), 2)
+        sorted_latencies = sorted(latencies)
+        idx = int(round(0.95 * (len(sorted_latencies) - 1)))
+        p95_latency = float(sorted_latencies[idx])
+    else:
+        avg_latency = None
+        p95_latency = None
+
+    if len(logs) >= 2:
+        start = logs[0].timestamp
+        end = logs[-1].timestamp
+        elapsed_seconds = max((end - start).total_seconds(), 1e-6)
+        actual_fps = round(len(logs) / elapsed_seconds, 2)
+    else:
+        actual_fps = None
+
+    target_fps = None
+    if session.session_metadata and session.session_metadata.get("frame_step"):
+        target_fps = round(30 / float(session.session_metadata["frame_step"]), 2)
+
+    avg_engagement = None
+    if logs:
+        avg_engagement = round(sum(log.engagement_score for log in logs) / len(logs), 2)
+
+    return SessionMetricsResponse(
+        session_id=session_id,
+        avg_latency_ms=avg_latency,
+        p95_latency_ms=p95_latency,
+        actual_fps=actual_fps,
+        target_fps=target_fps,
+        avg_engagement_score=avg_engagement,
+        alert_count=int(alert_count),
+    )

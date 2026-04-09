@@ -29,6 +29,28 @@ class _MockStream:
         }
 
 
+class _LowEngagementStream:
+    async def __call__(self, video_path: Path, frame_step: int = 5):
+        yield {
+            "frame_index": 0,
+            "timestamp_sec": 0.0,
+            "engagement_score": 20.0,
+            "engaged_count": 1,
+            "distracted_count": 4,
+            "classifications": [],
+            "processing_latency_ms": 12.5,
+        }
+        yield {
+            "frame_index": 5,
+            "timestamp_sec": 1.0,
+            "engagement_score": 15.0,
+            "engaged_count": 1,
+            "distracted_count": 4,
+            "classifications": [],
+            "processing_latency_ms": 13.0,
+        }
+
+
 def _login(client, email: str, password: str) -> str:
     res = client.post("/auth/login", json={"email": email, "password": password})
     assert res.status_code == 200
@@ -229,3 +251,41 @@ def test_admin_teacher_management_and_course_crud(client):
 
     delete_course_res = client.delete(f"/courses/{course_id}", headers={"Authorization": f"Bearer {admin_token}"})
     assert delete_course_res.status_code == 204
+
+
+def test_alert_config_and_session_metrics(client, monkeypatch):
+    admin_token = _login(client, "admin@fyp.com", "admin123")
+    monkeypatch.setattr(inference_service, "stream_video", _LowEngagementStream())
+
+    courses = client.get("/courses", headers={"Authorization": f"Bearer {admin_token}"}).json()
+    course = courses[0]
+
+    config_res = client.put(
+        f"/courses/{course['id']}/alert-config",
+        json={"engagement_threshold": 80, "duration_seconds": 0, "enabled": True},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert config_res.status_code == 200
+    assert config_res.json()["enabled"] is True
+
+    start = client.post(
+        "/sessions/start",
+        json={"course_id": course["id"], "video_path": course["available_videos"][0] if course["available_videos"] else "tests/test_video.mp4", "frame_step": 5},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert start.status_code == 200
+    session_id = start.json()["session_id"]
+
+    with client.websocket_connect(f"/sessions/ws/stream/{session_id}") as ws:
+        first = ws.receive_json()
+        assert first["alert_state"]["active"] is True
+        assert first["alert_state"]["reason"]
+
+    end = client.post(f"/sessions/{session_id}/end", headers={"Authorization": f"Bearer {admin_token}"})
+    assert end.status_code == 200
+
+    metrics = client.get(f"/sessions/{session_id}/metrics", headers={"Authorization": f"Bearer {admin_token}"})
+    assert metrics.status_code == 200
+    body = metrics.json()
+    assert body["alert_count"] >= 1
+    assert body["avg_latency_ms"] is not None

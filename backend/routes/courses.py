@@ -9,8 +9,8 @@ from ai.inference_utils import discover_video_files
 from ..config import settings
 from ..database import get_db
 from ..deps import get_admin_user, get_current_user
-from ..models import ClassSession, Course, User, UserRole
-from ..schemas import CourseAnalyticsResponse, CourseOut, CreateCourseRequest, SessionScorePoint
+from ..models import AlertConfig, ClassSession, Course, User, UserRole
+from ..schemas import AlertConfigOut, AlertConfigRequest, CourseAnalyticsResponse, CourseOut, CreateCourseRequest, SessionScorePoint
 
 
 router = APIRouter(prefix="/courses", tags=["courses"])
@@ -112,3 +112,53 @@ def delete_course(course_id: int, admin_user: User = Depends(get_admin_user), db
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     db.delete(course)
     db.commit()
+
+
+@router.get("/{course_id}/alert-config", response_model=AlertConfigOut)
+def get_alert_config(course_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if course is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+    if current_user.role != UserRole.ADMIN and course.instructor_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot view this alert config")
+
+    config = db.query(AlertConfig).filter(AlertConfig.course_id == course_id).first()
+    if config is None:
+        return AlertConfigOut(course_id=course_id, engagement_threshold=50.0, duration_seconds=180, enabled=True)
+
+    return AlertConfigOut(
+        course_id=course_id,
+        engagement_threshold=float(config.engagement_threshold),
+        duration_seconds=int(config.duration_seconds),
+        enabled=bool(config.enabled),
+    )
+
+
+@router.put("/{course_id}/alert-config", response_model=AlertConfigOut)
+def upsert_alert_config(course_id: int, payload: AlertConfigRequest, admin_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    _ = admin_user
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if course is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+
+    config = db.query(AlertConfig).filter(AlertConfig.course_id == course_id).first()
+    if config is None:
+        config = AlertConfig(
+            course_id=course_id,
+            engagement_threshold=payload.engagement_threshold,
+            duration_seconds=payload.duration_seconds,
+            enabled=payload.enabled,
+        )
+        db.add(config)
+    else:
+        config.engagement_threshold = payload.engagement_threshold
+        config.duration_seconds = payload.duration_seconds
+        config.enabled = payload.enabled
+
+    db.commit()
+    return AlertConfigOut(
+        course_id=course_id,
+        engagement_threshold=float(payload.engagement_threshold),
+        duration_seconds=payload.duration_seconds,
+        enabled=payload.enabled,
+    )

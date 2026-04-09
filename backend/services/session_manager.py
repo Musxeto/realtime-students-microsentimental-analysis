@@ -16,10 +16,19 @@ class LiveSessionState:
     last_payload: dict | None = None
     active: bool = True
     log_buffer: list[dict] = field(default_factory=list)
+    performance_buffer: list[dict] = field(default_factory=list)
     engagement_sum: float = 0.0
     engagement_count: int = 0
     peak_distracted_count: int = 0
     peak_distracted_timestamp: float | None = None
+    alert_threshold: float = 50.0
+    alert_duration_seconds: int = 180
+    alert_enabled: bool = True
+    low_engagement_start_sec: float | None = None
+    alert_active: bool = False
+    alert_reason: str | None = None
+    alert_triggered_at: datetime | None = None
+    alert_event_open: bool = False
     disconnected_at: datetime | None = None
     timeout_task: asyncio.Task | None = None
 
@@ -71,9 +80,18 @@ class SessionManager:
     def consume_frame_payload(self, session_id: int, payload: dict) -> None:
         state = self._sessions.get(session_id)
         if state is None:
-            return
+            return None
         state.last_payload = payload
         state.log_buffer.append(payload)
+        metric_latency = payload.get("processing_latency_ms")
+        if metric_latency is not None:
+            state.performance_buffer.append(
+                {
+                    "metric_type": "processing_latency_ms",
+                    "value": float(metric_latency),
+                    "timestamp": datetime.utcnow(),
+                }
+            )
         score = float(payload.get("engagement_score", 0.0))
         state.engagement_sum += score
         state.engagement_count += 1
@@ -81,6 +99,69 @@ class SessionManager:
         if distracted_count >= state.peak_distracted_count:
             state.peak_distracted_count = distracted_count
             state.peak_distracted_timestamp = payload.get("timestamp_sec")
+
+        timestamp_sec = float(payload.get("timestamp_sec", 0.0))
+        if not state.alert_enabled:
+            state.low_engagement_start_sec = None
+            state.alert_active = False
+            state.alert_reason = None
+            state.alert_triggered_at = None
+            state.alert_event_open = False
+            return self.alert_state(session_id)
+
+        if score < state.alert_threshold:
+            if state.low_engagement_start_sec is None:
+                state.low_engagement_start_sec = timestamp_sec
+            low_duration = timestamp_sec - state.low_engagement_start_sec
+            if not state.alert_active and low_duration >= state.alert_duration_seconds:
+                state.alert_active = True
+                state.alert_reason = (
+                    f"Engagement below {state.alert_threshold}% for {state.alert_duration_seconds}s"
+                )
+                state.alert_triggered_at = datetime.utcnow()
+                state.alert_event_open = True
+        else:
+            state.low_engagement_start_sec = None
+            if state.alert_active:
+                state.alert_active = False
+                state.alert_reason = None
+                state.alert_triggered_at = None
+                state.alert_event_open = False
+
+        return self.alert_state(session_id)
+
+    def set_alert_config(
+        self,
+        session_id: int,
+        *,
+        threshold: float,
+        duration_seconds: int,
+        enabled: bool,
+    ) -> None:
+        state = self._sessions.get(session_id)
+        if state is None:
+            return
+        state.alert_threshold = threshold
+        state.alert_duration_seconds = duration_seconds
+        state.alert_enabled = enabled
+
+    def alert_state(self, session_id: int) -> dict:
+        state = self._sessions.get(session_id)
+        if state is None:
+            return {"active": False, "reason": "", "triggered_at": None}
+        return {
+            "active": state.alert_active,
+            "reason": state.alert_reason or "",
+            "triggered_at": state.alert_triggered_at.isoformat() if state.alert_triggered_at else None,
+        }
+
+    def drain_performance_buffer(self, session_id: int) -> list[dict]:
+        state = self._sessions.get(session_id)
+        if state is None or not state.performance_buffer:
+            return []
+        drained = list(state.performance_buffer)
+        state.performance_buffer.clear()
+        return drained
 
     def drain_log_buffer(self, session_id: int) -> list[dict]:
         state = self._sessions.get(session_id)

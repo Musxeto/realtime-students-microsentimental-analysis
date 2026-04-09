@@ -76,6 +76,29 @@ export interface CourseAnalytics {
   trend: Array<{ session_id: number; start_time: string; final_avg_score: number }>
 }
 
+export interface AlertConfig {
+  course_id: number
+  engagement_threshold: number
+  duration_seconds: number
+  enabled: boolean
+}
+
+export interface AlertConfigRequest {
+  engagement_threshold: number
+  duration_seconds: number
+  enabled: boolean
+}
+
+export interface SessionMetricsResponse {
+  session_id: number
+  avg_latency_ms: number | null
+  p95_latency_ms: number | null
+  actual_fps: number | null
+  target_fps: number | null
+  avg_engagement_score: number | null
+  alert_count: number
+}
+
 export interface TeacherListItem {
   id: number
   name: string
@@ -173,6 +196,18 @@ export const apiSlice = createApi({
       query: (courseId) => `/courses/${courseId}/analytics`,
       providesTags: ['Course'],
     }),
+    getAlertConfig: builder.query<AlertConfig, number>({
+      query: (courseId) => `/courses/${courseId}/alert-config`,
+      providesTags: ['Course'],
+    }),
+    updateAlertConfig: builder.mutation<AlertConfig, { courseId: number; payload: AlertConfigRequest }>({
+      query: ({ courseId, payload }) => ({
+        url: `/courses/${courseId}/alert-config`,
+        method: 'PUT',
+        body: payload,
+      }),
+      invalidatesTags: ['Course'],
+    }),
     startSession: builder.mutation<StartSessionResponse, StartSessionRequest>({
       query: (body) => ({
         url: '/sessions/start',
@@ -207,6 +242,10 @@ export const apiSlice = createApi({
         url: `/sessions/${sessionId}/logs`,
         params: { limit, offset },
       }),
+      providesTags: ['Session'],
+    }),
+    getSessionMetrics: builder.query<SessionMetricsResponse, number>({
+      query: (sessionId) => `/sessions/${sessionId}/metrics`,
       providesTags: ['Session'],
     }),
     getTeachers: builder.query<TeacherListItem[], void>({
@@ -249,11 +288,14 @@ export const {
   useCreateCourseMutation,
   useDeleteCourseMutation,
   useGetCourseAnalyticsQuery,
+  useGetAlertConfigQuery,
+  useUpdateAlertConfigMutation,
   useStartSessionMutation,
   useEndSessionMutation,
   useGetSessionsQuery,
   useGetSessionByIdQuery,
   useGetSessionLogsQuery,
+  useGetSessionMetricsQuery,
   useGetTeachersQuery,
   useCreateTeacherMutation,
   useUpdateTeacherMutation,

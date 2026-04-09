@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from time import perf_counter
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -27,9 +28,13 @@ class InferenceService:
                 return None
 
         while True:
+            start = perf_counter()
             payload = await asyncio.to_thread(_next_item)
+            elapsed_ms = round((perf_counter() - start) * 1000, 2)
             if payload is None:
                 break
+            payload = dict(payload)
+            payload["processing_latency_ms"] = elapsed_ms
             yield payload
             await asyncio.sleep(0)
 

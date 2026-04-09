@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
-from ..models import ClassSession, SessionLog
+from ..models import AlertEvent, ClassSession, PerformanceMetric, SessionLog
 
 
 class SessionRepository:
@@ -40,6 +40,36 @@ class SessionRepository:
             meta = session.session_metadata or {}
             meta["final_summary"] = summary
             session.session_metadata = meta
+            db.commit()
+
+    def add_alert_event(self, session_id: int, engagement_at_trigger: float, reason: str) -> None:
+        with SessionLocal() as db:
+            db.add(
+                AlertEvent(
+                    session_id=session_id,
+                    engagement_at_trigger=engagement_at_trigger,
+                    reason=reason,
+                )
+            )
+            db.commit()
+
+    def add_performance_metrics(self, session_id: int, metrics: Iterable[dict]) -> None:
+        payloads = list(metrics)
+        if not payloads:
+            return
+
+        with SessionLocal() as db:
+            entries = []
+            for payload in payloads:
+                entries.append(
+                    PerformanceMetric(
+                        session_id=session_id,
+                        metric_type=str(payload.get("metric_type", "processing_latency_ms")),
+                        value=float(payload.get("value", 0.0)),
+                        timestamp=payload.get("timestamp", datetime.utcnow()),
+                    )
+                )
+            db.add_all(entries)
             db.commit()
 
 

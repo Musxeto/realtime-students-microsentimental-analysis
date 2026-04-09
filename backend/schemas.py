@@ -158,6 +158,29 @@ class TeacherAnalyticsResponse(BaseModel):
     courses: list[TeacherCourseAnalytics] = Field(default_factory=list)
 
 
+class AlertConfigRequest(BaseModel):
+    engagement_threshold: float = Field(ge=0, le=100)
+    duration_seconds: int = Field(ge=0, le=3600)
+    enabled: bool = True
+
+
+class AlertConfigOut(BaseModel):
+    course_id: int
+    engagement_threshold: float
+    duration_seconds: int
+    enabled: bool
+
+
+class SessionMetricsResponse(BaseModel):
+    session_id: int
+    avg_latency_ms: float | None
+    p95_latency_ms: float | None
+    actual_fps: float | None
+    target_fps: float | None
+    avg_engagement_score: float | None
+    alert_count: int
+
+
 class ErrorResponse(BaseModel):
     error_code: str
     message: str

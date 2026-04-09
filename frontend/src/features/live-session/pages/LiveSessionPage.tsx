@@ -2,7 +2,7 @@ import { Card, DonutChart, LineChart, Metric, Text, Title } from '@tremor/react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSessionWebSocket } from '../../../hooks/useSessionWebSocket'
-import { useEndSessionMutation } from '../../../services/api/apiSlice'
+import { useEndSessionMutation, useGetSessionMetricsQuery } from '../../../services/api/apiSlice'
 
 export function LiveSessionPage() {
   const { id } = useParams()
@@ -10,10 +10,13 @@ export function LiveSessionPage() {
   const { lastJsonMessage, readyState } = useSessionWebSocket(id)
   const [endSession, { isLoading: isEnding }] = useEndSessionMutation()
   const [timeline, setTimeline] = useState<Array<{ time: string; engagement: number }>>([])
+  const sessionId = Number(id)
+  const { data: metrics } = useGetSessionMetricsQuery(sessionId, { skip: !id || Number.isNaN(sessionId) })
 
   const currentEngagement = lastJsonMessage?.engagement_score ?? 0
   const engagedCount = lastJsonMessage?.engaged_count ?? 0
   const distractedCount = lastJsonMessage?.distracted_count ?? 0
+  const alertState = lastJsonMessage?.alert_state
 
   useEffect(() => {
     if (!lastJsonMessage) {
@@ -87,6 +90,28 @@ export function LiveSessionPage() {
         </Card>
 
         <Card>
+          <Title>Runtime Metrics</Title>
+          <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-600">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Avg latency</p>
+              <p className="text-base font-semibold text-slate-900">{metrics?.avg_latency_ms ?? '-'} ms</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">P95 latency</p>
+              <p className="text-base font-semibold text-slate-900">{metrics?.p95_latency_ms ?? '-'} ms</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Actual FPS</p>
+              <p className="text-base font-semibold text-slate-900">{metrics?.actual_fps ?? '-'}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Alerts</p>
+              <p className="text-base font-semibold text-slate-900">{metrics?.alert_count ?? 0}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
           <Title>Engagement Timeline</Title>
           <LineChart
             className="mt-4 h-56"
@@ -101,9 +126,11 @@ export function LiveSessionPage() {
         <Card decoration="top" decorationColor="rose">
           <Title>AI Co-Pilot Alert</Title>
           <Text>
-            {lastJsonMessage?.message
-              ? lastJsonMessage.message
-              : 'No intervention required yet. Alerts will appear on sustained low engagement.'}
+            {alertState?.active
+              ? alertState.reason || 'Low engagement alert is active.'
+              : lastJsonMessage?.message
+                ? lastJsonMessage.message
+                : 'No intervention required yet. Alerts will appear on sustained low engagement.'}
           </Text>
         </Card>
       </div>
