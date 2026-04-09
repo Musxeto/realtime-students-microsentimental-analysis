@@ -10,6 +10,7 @@ const AdminDashboardPage = lazy(() => import('../features/admin/pages/AdminDashb
 const TeacherDashboardPage = lazy(() => import('../features/teacher/pages/TeacherDashboardPage').then((module) => ({ default: module.TeacherDashboardPage })))
 const SessionStartPage = lazy(() => import('../features/live-session/pages/SessionStartPage').then((module) => ({ default: module.SessionStartPage })))
 const LiveSessionPage = lazy(() => import('../features/live-session/pages/LiveSessionPage').then((module) => ({ default: module.LiveSessionPage })))
+const SessionSummaryPage = lazy(() => import('../features/live-session/pages/SessionSummaryPage').then((module) => ({ default: module.SessionSummaryPage })))
 
 function PageLoader() {
   return (
@@ -76,6 +77,14 @@ export const router = createBrowserRouter([
         element: withSuspense(
           <ProtectedRoute allow={['teacher', 'admin']}>
             <LiveSessionPage />
+          </ProtectedRoute>,
+        ),
+      },
+      {
+        path: 'session/:id/summary',
+        element: withSuspense(
+          <ProtectedRoute allow={['teacher', 'admin']}>
+            <SessionSummaryPage />
           </ProtectedRoute>,
         ),
       },

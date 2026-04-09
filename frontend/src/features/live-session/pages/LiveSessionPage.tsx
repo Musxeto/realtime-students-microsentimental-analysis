@@ -47,8 +47,12 @@ export function LiveSessionPage() {
       return
     }
     try {
-      await endSession(Number(id)).unwrap()
-      navigate('/dashboard')
+      const result = await endSession(Number(id)).unwrap()
+      navigate(`/session/${id}/summary`, {
+        state: {
+          final_avg_score: result.final_avg_score,
+        },
+      })
     } catch {
       // Keep user on page; stream may still be active.
     }

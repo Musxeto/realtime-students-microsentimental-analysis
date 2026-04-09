@@ -66,6 +66,7 @@ src/
 - /dashboard
 - /session/start
 - /session/:id
+- /session/:id/summary
 
 Route protection is role-based in src/features/auth/ProtectedRoute.tsx.
 
@@ -90,3 +91,9 @@ Route protection is role-based in src/features/auth/ProtectedRoute.tsx.
 - Production build currently succeeds.
 - Route-level lazy loading is enabled for dashboard pages.
 - Tremor-heavy live session chart chunk remains the largest asset and can be further split if needed.
+
+## Remaining Optional Improvements
+
+- Add virtualized rendering for very long session log tables.
+- Add toast notifications and retry UX for transient API failures.
+- Add E2E browser tests for full teacher live-session journey.

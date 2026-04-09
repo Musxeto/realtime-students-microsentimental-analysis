@@ -218,6 +218,12 @@ Key files:
 - [frontend/src/services/api/apiSlice.ts](frontend/src/services/api/apiSlice.ts)
 - [frontend/src/hooks/useSessionWebSocket.ts](frontend/src/hooks/useSessionWebSocket.ts)
 
+Implemented teacher runtime flow:
+
+- Start session from /session/start
+- Live monitoring at /session/{id}
+- Post-session review at /session/{id}/summary
+
 ## Running Tests
 
 Backend tests:
@@ -270,6 +276,11 @@ npm run build
 - Backend auth, RBAC, admin workflows, course analytics, alert configuration, session metrics, and websocket streaming are implemented.
 - Frontend has role-based login redirects, working admin and teacher dashboards, live session runtime controls, and realtime engagement/alert views.
 - Backend API tests and frontend production build pass on current branch.
+
+Known non-blocking items:
+
+- Backend uses `datetime.utcnow()` in multiple places and emits deprecation warnings under Python 3.12+ test runs.
+- Live session chart bundle is still the largest frontend chunk due to charting/runtime dependencies.
 
 ---
 
