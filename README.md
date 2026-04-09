@@ -1,146 +1,176 @@
 # Real-time Students Micro-Sentimental Analysis
 
-YOLOv11-based classroom behavior detection for training and live webcam inference.
+YOLOv11-based classroom behavior analytics with a FastAPI backend for authenticated session control and real-time WebSocket streaming.
 
-## Project Structure
+## Current MVP Scope
 
-Your workspace is already in the right shape:
+- Two-stage computer vision pipeline (person detection + behavior classification).
+- FastAPI backend with JWT authentication.
+- Role-filtered course listing (Admin sees all, Teacher sees assigned courses).
+- Session lifecycle APIs (`start`, `end`) and WebSocket stream endpoint.
+- PostgreSQL via Docker Compose for persistence.
+- Automatic seed data for quick local testing.
+
+## Repository Layout
 
 ```text
 FYP CODE/
-├── dataset/
-│   ├── train/images, train/labels
-│   ├── valid/images, valid/labels
-│   ├── test/images, test/labels
-│   └── data.yaml
-├── train_model.py
-├── live_inference.py
-├── train_model.ipynb
-└── live_inference.ipynb
+├── ai/
+│   ├── inference_utils.py
+│   ├── tests/
+│   │   ├── test_image.py
+│   │   └── test_video.py
+│   ├── dataset/
+│   └── fyp_runs/
+├── backend/
+│   ├── main.py
+│   ├── config.py
+│   ├── models.py
+│   ├── routes/
+│   │   ├── auth.py
+│   │   ├── courses.py
+│   │   └── sessions.py
+│   └── services/
+├── Dockerfile
+├── docker-compose.yml
+└── requirements.txt
 ```
 
-`dataset/data.yaml` must keep relative paths:
+## Prerequisites
 
-```yaml
-train: train/images
-val: valid/images
-test: test/images
-```
+- Python 3.11+ (tested with 3.12 virtual environment).
+- Docker Desktop (for PostgreSQL + API containerized run).
+- Model files present under `ai/`:
+	- `ai/yolo11n.onnx` or `ai/yolo11n.pt`
+	- `ai/fyp_runs/classroom_model_v2/weights/best.onnx` or `best.pt`
 
-## Local Setup (Windows + AMD RX5700)
+## Local Python Setup (No Docker)
 
-1. Create and activate a virtual environment.
-2. Install dependencies:
-
-```bash
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
-3. Train from script:
+Run the API:
 
-```bash
-python train_model.py
+```powershell
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-4. Run live inference:
+Health check:
 
-```bash
-python live_inference.py --show-fps
+```text
+GET http://localhost:8000/health
 ```
 
-Notes for AMD on Windows:
-- Standard PyTorch on Windows does not use AMD RX5700 for GPU training.
-- The script will automatically fall back to CPU.
-- For fast GPU training, use Google Colab GPU.
+## Docker Setup (Recommended)
 
-## Video Extraction
-
-The video pipeline lives in `ai/tests/test_video.py`. It processes every 5th frame, runs the two-stage person + behavior pipeline, and prints a JSON summary.
-
-Example run on Windows with DirectML-friendly ONNX models:
-
-```bash
-pip install -r requirements.txt
-yolo export model=ai/fyp_runs/classroom_model_v2/weights/best.pt format=onnx
-python ai/tests/test_video.py path\to\classroom.mp4 --show-providers
+```powershell
+docker compose up --build
 ```
 
-If you want AMD RX5700 acceleration on Windows, install the DirectML runtime in the same environment:
+This starts:
+- `db` (PostgreSQL 15)
+- `api` (FastAPI on port 8000)
 
-```bash
-pip uninstall -y onnxruntime
-pip install onnxruntime-directml
+Default DB connection in compose:
+
+```text
+postgresql+psycopg2://fyp:fyp@db:5432/fyp
 ```
 
-For Colab, keep using standard `onnxruntime` or PyTorch on GPU; `onnxruntime-directml` is Windows-only.
+## Seeded Accounts (Startup)
 
-## Colab Setup (Dataset in Drive root /dataset)
+On backend startup, demo users and courses are auto-created if missing:
 
-In Colab, run:
+- Admin: `admin@fyp.local` / `admin123`
+- Teacher: `teacher@fyp.local` / `teacher123`
+- Courses: `Classroom A`, `Classroom B` (assigned to Teacher)
 
-```python
-from google.colab import drive
-drive.mount('/content/drive')
+## API Quick Flow
+
+### 1) Login
+
+```http
+POST /auth/login
+Content-Type: application/json
+
+{
+	"email": "teacher@fyp.local",
+	"password": "teacher123"
+}
 ```
 
-```bash
-!pip install ultralytics opencv-python
+Response includes bearer token:
+
+```json
+{
+	"access_token": "<jwt>",
+	"token_type": "bearer"
+}
 ```
 
-If your code is in GitHub, clone it:
+### 2) List Courses + Available Videos
 
-```bash
-!git clone https://github.com/<your-user>/<your-repo>.git
-%cd <your-repo>
+```http
+GET /courses
+Authorization: Bearer <jwt>
 ```
 
-Train using your Drive dataset:
+### 3) Start Session
 
-```bash
-!python train_model.py --data /content/drive/MyDrive/dataset/data.yaml --project /content/drive/MyDrive/fyp_runs
+```http
+POST /sessions/start
+Authorization: Bearer <jwt>
+Content-Type: application/json
+
+{
+	"course_id": 1,
+	"video_path": "tests/test_video.mp4",
+	"frame_step": 5
+}
 ```
 
-Run inference (Colab webcam support is limited in standard notebooks; local PC is recommended for realtime webcam):
+### 4) Stream Analytics
 
-```bash
-!python live_inference.py --model-path /content/drive/MyDrive/fyp_runs/classroom_model_v1/weights/best.pt
+Connect WebSocket:
+
+```text
+ws://localhost:8000/sessions/ws/stream/{session_id}
 ```
 
-## Notebook Usage
+Stream payload contains per-frame detections and engagement metrics.
 
-If you prefer notebooks:
+### 5) End Session
 
-```bash
-jupyter notebook
+```http
+POST /sessions/{session_id}/end
+Authorization: Bearer <jwt>
 ```
 
-Open and run:
-- `train_model.ipynb`
-- `live_inference.ipynb`
+## Inference Notes (Windows + AMD RX5700)
 
-Use the same dataset path logic:
-- Local: `dataset/data.yaml`
-- Colab: `/content/drive/MyDrive/dataset/data.yaml`
+- ONNX is preferred for local inference with AMD.
+- `onnxruntime-directml` is included in `requirements.txt` for Windows.
+- If ONNX provider is unavailable in a specific environment, inference falls back to available runtimes.
 
-## Outputs
+You can still run the standalone video tester:
 
-Training creates:
-- `fyp_runs/classroom_model_v1/weights/best.pt`
-- `fyp_runs/classroom_model_v1/results.png`
-- `fyp_runs/classroom_model_v1/confusion_matrix.png`
+```powershell
+python ai/tests/test_video.py
+```
+
+## Known Gaps (Next Iterations)
+
+- Alembic migrations are not yet wired (tables are created on startup).
+- Admin-only teacher provisioning endpoint is not added yet.
+- Minute-level batch session logging and Gemini co-pilot logic are pending.
+- Frontend dashboard integration is pending.
 
 ## Troubleshooting
 
-OOM during training:
-- Run `python train_model.py --batch 8`
-
-Webcam not opening:
-- Try `python live_inference.py --source 1`
-
-Wrong model path:
-- Pass explicit path:
-`python live_inference.py --model-path fyp_runs/classroom_model_v1/weights/best.pt`
-
-Video extractor not finding a file:
-- Pass the video path explicitly:
-`python ai/tests/test_video.py D:\videos\classroom.mp4`
+- If models are not found, verify files exist under `ai/` paths listed above.
+- If login fails, confirm API startup completed and seed data ran.
+- If WebSocket closes immediately, ensure the session was started first.
