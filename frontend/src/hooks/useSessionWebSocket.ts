@@ -1,8 +1,11 @@
 import { useMemo } from 'react'
 import { useSelector } from 'react-redux'
-import useWebSocket from 'react-use-websocket'
+import useWebSocketImport from 'react-use-websocket'
 import { WS_BASE_URL } from '../config/env'
 import type { RootState } from '../app/store'
+
+const useWebSocket =
+  (useWebSocketImport as unknown as { default?: typeof useWebSocketImport }).default ?? useWebSocketImport
 
 export interface SessionPayload {
   session_id?: number
