@@ -1,5 +1,8 @@
+import { useMemo } from 'react'
+import { useSelector } from 'react-redux'
 import useWebSocket from 'react-use-websocket'
 import { WS_BASE_URL } from '../config/env'
+import type { RootState } from '../app/store'
 
 export interface SessionPayload {
   session_id?: number
@@ -18,21 +21,26 @@ export interface SessionPayload {
 }
 
 export function useSessionWebSocket(sessionId: string | undefined) {
-  const socketUrl = sessionId
-    ? `${WS_BASE_URL}/sessions/ws/stream/${sessionId}`
-    : null
+  const token = useSelector((s: RootState) => s.auth.accessToken)
 
-  const { lastJsonMessage, readyState } = useWebSocket<SessionPayload>(
-    socketUrl,
-    {
-      shouldReconnect: () => true,
-      reconnectInterval: 3000,
-      heartbeat: {
-        message: 'ping',
-        interval: 30000,
-      },
+  const socketUrl = useMemo(() => {
+    if (!sessionId) return null
+    // Attach access token as query param to support authenticated websocket proxies.
+    if (token) {
+      const sep = WS_BASE_URL.includes('?') ? '&' : '?'
+      return `${WS_BASE_URL}/sessions/ws/stream/${sessionId}${sep}token=${encodeURIComponent(token)}`
+    }
+    return `${WS_BASE_URL}/sessions/ws/stream/${sessionId}`
+  }, [sessionId, token])
+
+  const { lastJsonMessage, readyState } = useWebSocket<SessionPayload>(socketUrl, {
+    shouldReconnect: () => true,
+    reconnectInterval: 3000,
+    heartbeat: {
+      message: 'ping',
+      interval: 30000,
     },
-  )
+  })
 
   return {
     lastJsonMessage,

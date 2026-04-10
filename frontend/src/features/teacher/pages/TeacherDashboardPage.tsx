@@ -22,7 +22,8 @@ function CourseAnalyticsCard({ courseId, courseName }: { courseId: number; cours
 }
 
 export function TeacherDashboardPage() {
-  const { data: courses = [], isLoading: isCoursesLoading, isError: isCoursesError } = useGetCoursesQuery()
+  const { data: coursesData, isLoading: isCoursesLoading, isError: isCoursesError } = useGetCoursesQuery({ limit: 100 })
+  const courses = coursesData?.items ?? []
   const { data: sessions, isLoading: sessionsLoading, isError: sessionsError } = useGetSessionsQuery({ limit: 20, offset: 0 })
 
   return (

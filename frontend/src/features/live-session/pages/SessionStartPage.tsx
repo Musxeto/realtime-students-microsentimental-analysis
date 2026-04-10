@@ -4,7 +4,8 @@ import { useGetCoursesQuery, useStartSessionMutation } from '../../../services/a
 
 export function SessionStartPage() {
   const navigate = useNavigate()
-  const { data: courses = [], isLoading } = useGetCoursesQuery()
+  const { data: coursesData, isLoading } = useGetCoursesQuery({ limit: 100 })
+  const courses = coursesData?.items ?? []
   const [startSession, { isLoading: isStarting }] = useStartSessionMutation()
   const [courseId, setCourseId] = useState<number | null>(null)
   const [videoPath, setVideoPath] = useState('')

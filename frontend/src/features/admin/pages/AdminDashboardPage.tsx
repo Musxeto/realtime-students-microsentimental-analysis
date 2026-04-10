@@ -282,12 +282,12 @@ export function AdminDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-600">Total Teachers</p>
-                  <p className="mt-2 text-3xl font-bold text-slate-900">{teachers.length}</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-900">{teachersTotal}</p>
                 </div>
                 <Users className="h-12 w-12 text-blue-100" />
               </div>
               <p className="mt-4 text-xs text-slate-500">
-                {teachers.filter((t) => t.is_active).length} active
+                {teachers.filter((t) => t.is_active).length} active (this page)
               </p>
             </div>
 
@@ -295,7 +295,7 @@ export function AdminDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-600">Total Courses</p>
-                  <p className="mt-2 text-3xl font-bold text-slate-900">{courses.length}</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-900">{coursesTotal}</p>
                 </div>
                 <BookOpen className="h-12 w-12 text-emerald-100" />
               </div>
@@ -750,8 +750,8 @@ export function AdminDashboardPage() {
           <div className="mt-6 space-y-4 text-slate-600">
             <p className="text-sm">• Backend API: Configured and running</p>
             <p className="text-sm">• Database: PostgreSQL 15 connected</p>
-            <p className="text-sm">• Teachers: {teachers.length} active accounts</p>
-            <p className="text-sm">• Courses: {courses.length} total courses</p>
+            <p className="text-sm">• Teachers: {teachersTotal} active accounts</p>
+            <p className="text-sm">• Courses: {coursesTotal} total courses</p>
             <p className="text-sm">• Sessions: {totalSessions} recorded sessions</p>
             <hr className="my-6" />
             <p className="text-xs text-slate-500">Settings and configuration options will be expanded based on system requirements.</p>
