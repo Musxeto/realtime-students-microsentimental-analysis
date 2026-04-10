@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { AlertCircle, BarChart3, BookOpen, ChevronLeft, ChevronRight, Filter, KeyRound, LineChart, Pencil, Plus, Search, Settings, Sparkles, Trash2, Users } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { Link } from 'react-router-dom'
+import { useConfirm } from '../../../app/confirm'
 import {
   useAdminResetUserPasswordMutation,
   useCreateCourseMutation,
@@ -21,6 +23,7 @@ import { UpdateAlertConfigModal } from '../../../components/modals/UpdateAlertCo
 type Tab = 'overview' | 'teachers' | 'courses' | 'alerts' | 'settings'
 
 export function AdminDashboardPage() {
+  const confirm = useConfirm()
   const [createTeacher, { isLoading: creatingTeacher }] = useCreateTeacherMutation()
   const [updateTeacher] = useUpdateTeacherMutation()
   const [adminResetUserPassword, { isLoading: resettingPassword }] = useAdminResetUserPasswordMutation()
@@ -49,7 +52,12 @@ export function AdminDashboardPage() {
     offset: teacherPage * pageSize,
   })
 
-  const { data: coursesData } = useGetCoursesQuery({
+  const { data: allTeachersData } = useGetTeachersQuery({
+    limit: 100,
+    offset: 0,
+  })
+
+  const { data: coursesData, refetch: refetchCourses } = useGetCoursesQuery({
     search: courseSearch || undefined,
     semester: courseSemester === 'all' ? undefined : (courseSemester as number),
     section: courseSection === 'all' ? undefined : (courseSection as number),
@@ -59,13 +67,13 @@ export function AdminDashboardPage() {
   })
 
   const teachers = teachersData?.items ?? []
+  const teacherOptions = allTeachersData?.items ?? teachers
   const teachersTotal = teachersData?.total ?? 0
   const courses = coursesData?.items ?? []
   const coursesTotal = coursesData?.total ?? 0
 
   // Tab state
   const [activeTab, setActiveTab] = useState<Tab>('overview')
-  const [feedback, setFeedback] = useState<string | null>(null)
 
   // Modal states
   const [isCreateTeacherModalOpen, setIsCreateTeacherModalOpen] = useState(false)
@@ -91,11 +99,6 @@ export function AdminDashboardPage() {
     if (!selectedCourseId && courses.length > 0) setSelectedCourseId(courses[0].id)
   }, [courses, selectedCourseId])
 
-  const showFeedback = (msg: string) => {
-    setFeedback(msg)
-    setTimeout(() => setFeedback(null), 4000)
-  }
-
   // TEACHERS
   const handleCreateTeacher = async (data: { name: string; email: string; password: string; courseNames: string }) => {
     const courseNames = data.courseNames
@@ -110,9 +113,10 @@ export function AdminDashboardPage() {
         password: data.password,
         course_names: courseNames,
       }).unwrap()
-      showFeedback('Teacher created successfully.')
+      toast.success('Teacher created successfully.')
       setIsCreateTeacherModalOpen(false)
     } catch {
+      toast.error('Failed to create teacher. Check form or email already exists.')
       throw new Error('Failed to create teacher. Check form or email already exists.')
     }
   }
@@ -120,9 +124,9 @@ export function AdminDashboardPage() {
   const toggleTeacherStatus = async (id: number, active: boolean) => {
     try {
       await updateTeacher({ teacherId: id, payload: { is_active: !active } }).unwrap()
-      showFeedback(`Teacher ${!active ? 'activated' : 'deactivated'}.`)
+      toast.success(`Teacher ${!active ? 'activated' : 'deactivated'}.`)
     } catch {
-      showFeedback('Failed to update teacher status.')
+      toast.error('Failed to update teacher status.')
     }
   }
 
@@ -130,9 +134,10 @@ export function AdminDashboardPage() {
     if (!resetPasswordUserId) return
     try {
       await adminResetUserPassword({ userId: resetPasswordUserId, new_password: newPassword }).unwrap()
-      showFeedback('Password reset successfully.')
+      toast.success('Password reset successfully.')
       setIsResetPasswordModalOpen(false)
     } catch {
+      toast.error('Failed to reset password.')
       throw new Error('Failed to reset password.')
     }
   }
@@ -153,9 +158,11 @@ export function AdminDashboardPage() {
   }) => {
     try {
       await createCourse(data).unwrap()
-      showFeedback('Course created successfully.')
+      await refetchCourses()
+      toast.success('Course created successfully.')
       setIsCreateCourseModalOpen(false)
     } catch {
+      toast.error('Failed to create course.')
       throw new Error('Failed to create course.')
     }
   }
@@ -173,21 +180,31 @@ export function AdminDashboardPage() {
         courseId: editingCourse.id,
         payload: data,
       }).unwrap()
-      showFeedback('Course updated successfully.')
+      await refetchCourses()
+      toast.success('Course updated successfully.')
       setIsEditCourseModalOpen(false)
       setEditingCourse(null)
     } catch {
+      toast.error('Failed to update course.')
       throw new Error('Failed to update course.')
     }
   }
 
   const handleDeleteCourse = async (id: number) => {
-    if (!window.confirm('Delete this course?')) return
+    const approved = await confirm({
+      title: 'Delete course',
+      message: 'Are you sure you want to delete this course?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      destructive: true,
+    })
+    if (!approved) return
     try {
       await deleteCourse(id).unwrap()
-      showFeedback('Course deleted.')
+      await refetchCourses()
+      toast.success('Course deleted.')
     } catch {
-      showFeedback('Failed to delete course.')
+      toast.error('Failed to delete course.')
     }
   }
 
@@ -219,9 +236,10 @@ export function AdminDashboardPage() {
           enabled: data.enabled,
         },
       }).unwrap()
-      showFeedback('Alert config updated.')
+      toast.success('Alert config updated.')
       setIsUpdateAlertConfigModalOpen(false)
     } catch {
+      toast.error('Failed to update alert config.')
       throw new Error('Failed to update alert config.')
     }
   }
@@ -241,13 +259,6 @@ export function AdminDashboardPage() {
           <p className="mt-1 text-sm text-slate-500">Manage teachers, courses, and system settings</p>
         </div>
       </div>
-
-      {feedback && (
-        <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-          <AlertCircle className="mt-0.5 h-5 w-5 text-emerald-600" />
-          <p className="text-sm font-medium text-emerald-900">{feedback}</p>
-        </div>
-      )}
 
  {/* TAB NAVIGATION */}
       <div className="sticky bottom-0 z-10 mt-8 rounded-xl border border-slate-200 bg-white/90 p-2 shadow-sm backdrop-blur">
@@ -784,14 +795,14 @@ export function AdminDashboardPage() {
       <CreateCourseModal
         isOpen={isCreateCourseModalOpen}
         onClose={() => setIsCreateCourseModalOpen(false)}
-        teachers={teachers.map((teacher) => ({ id: teacher.id, name: teacher.name }))}
+        teachers={teacherOptions.map((teacher) => ({ id: teacher.id, name: teacher.name }))}
         onSubmit={handleCreateCourse}
       />
 
       <EditCourseModal
         isOpen={isEditCourseModalOpen}
         initialCourse={editingCourse ?? undefined}
-        teachers={teachers.map((teacher) => ({ id: teacher.id, name: teacher.name }))}
+        teachers={teacherOptions.map((teacher) => ({ id: teacher.id, name: teacher.name }))}
         onClose={() => {
           setIsEditCourseModalOpen(false)
           setEditingCourse(null)
