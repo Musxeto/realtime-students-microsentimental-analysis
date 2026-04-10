@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
@@ -16,11 +18,31 @@ from ..schemas import AlertConfigOut, AlertConfigRequest, CourseAnalyticsRespons
 
 router = APIRouter(prefix="/courses", tags=["courses"])
 
+_VIDEO_CACHE_TTL_SECONDS = 30.0
+_video_cache_payload: list[str] = []
+_video_cache_expires_at = 0.0
+
 
 def _normalize_course_code(raw: str | None, fallback_name: str) -> str:
     if raw and raw.strip():
         return raw.strip().upper().replace(" ", "")
     return fallback_name.strip().upper().replace(" ", "-")[:32]
+
+
+def _get_available_videos_cached() -> list[str]:
+    global _video_cache_expires_at, _video_cache_payload
+
+    now = time.monotonic()
+    if now < _video_cache_expires_at:
+        return _video_cache_payload
+
+    videos = [
+        str(path.relative_to(settings.video_root)) if path.is_relative_to(settings.video_root) else str(path)
+        for path in discover_video_files([settings.video_root, settings.ai_dir])
+    ]
+    _video_cache_payload = videos
+    _video_cache_expires_at = now + _VIDEO_CACHE_TTL_SECONDS
+    return _video_cache_payload
 
 
 @router.post("", response_model=CourseOut)
@@ -95,10 +117,7 @@ def list_courses(
     total = query.count()
     rows = query.order_by(Course.semester.asc(), Course.course_name.asc()).offset(offset).limit(limit).all()
 
-    videos = [
-        str(path.relative_to(settings.video_root)) if path.is_relative_to(settings.video_root) else str(path)
-        for path in discover_video_files([settings.video_root, settings.ai_dir])
-    ]
+    videos = _get_available_videos_cached()
     courses = []
     for course in rows:
         courses.append(

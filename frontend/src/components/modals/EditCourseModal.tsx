@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { BaseModal } from './BaseModal'
+import { TeacherSelect } from './TeacherSelect'
 
 interface EditCourseModalProps {
   isOpen: boolean
@@ -124,22 +125,14 @@ export function EditCourseModal({ isOpen, initialCourse, teachers = [], onClose,
         </div>
         
         <div>
-          <label htmlFor="instructorId" className="block text-sm font-medium text-slate-700 mb-2">
+          <label className="block text-sm font-medium text-slate-700 mb-2">
             Assign Teacher / Classroom Owner
           </label>
-          <select
-            id="instructorId"
+          <TeacherSelect
+            teachers={teachers}
             value={formData.instructor_id}
-            onChange={(e) => setFormData({ ...formData, instructor_id: e.target.value })}
-            className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          >
-            <option value="">Unassigned</option>
-            {teachers.map((teacher) => (
-              <option key={teacher.id} value={teacher.id}>
-                {teacher.name}
-              </option>
-            ))}
-          </select>
+            onChange={(newValue) => setFormData({ ...formData, instructor_id: newValue })}
+          />
         </div>
 
         <div className="flex gap-3 pt-2">
