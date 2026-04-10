@@ -10,7 +10,7 @@ from ..config import settings
 from ..database import get_db
 from ..deps import get_admin_user, get_current_user
 from ..models import AlertConfig, ClassSession, Course, User, UserRole
-from ..schemas import AlertConfigOut, AlertConfigRequest, CourseAnalyticsResponse, CourseOut, CreateCourseRequest, SessionScorePoint
+from ..schemas import AlertConfigOut, AlertConfigRequest, CourseAnalyticsResponse, CourseOut, CreateCourseRequest, UpdateCourseRequest, SessionScorePoint
 
 
 router = APIRouter(prefix="/courses", tags=["courses"])
@@ -102,6 +102,31 @@ def get_course_analytics(course_id: int, current_user: User = Depends(get_curren
         lowest_final_score=lowest_final,
         trend=trend,
     )
+
+
+@router.patch("/{course_id}", response_model=CourseOut)
+def update_course(course_id: int, payload: UpdateCourseRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if course is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+    
+    if current_user.role != UserRole.ADMIN and course.instructor_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only update your own courses")
+    
+    if payload.course_name is not None:
+        course.course_name = payload.course_name.strip()
+    
+    if payload.instructor_id is not None:
+        if current_user.role != UserRole.ADMIN:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can transfer course ownership")
+        teacher = db.query(User).filter(User.id == payload.instructor_id, User.role == UserRole.TEACHER).first()
+        if teacher is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+        course.instructor_id = payload.instructor_id
+    
+    db.commit()
+    db.refresh(course)
+    return CourseOut(id=course.id, course_name=course.course_name, instructor_id=course.instructor_id, available_videos=[])
 
 
 @router.delete("/{course_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -71,6 +71,11 @@ class CreateCourseRequest(BaseModel):
     instructor_id: int | None = None
 
 
+class UpdateCourseRequest(BaseModel):
+    course_name: str | None = Field(default=None, min_length=2, max_length=255)
+    instructor_id: int | None = None
+
+
 class TeacherListItem(BaseModel):
     id: int
     name: str

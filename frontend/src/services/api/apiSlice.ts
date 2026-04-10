@@ -255,6 +255,14 @@ export const apiSlice = createApi({
       }),
       invalidatesTags: ['Course', 'Session'],
     }),
+    updateCourse: builder.mutation<Course, { courseId: number; payload: { course_name?: string; instructor_id?: number } }>({
+      query: ({ courseId, payload }) => ({
+        url: `/courses/${courseId}`,
+        method: 'PATCH',
+        body: payload,
+      }),
+      invalidatesTags: ['Course'],
+    }),
     getCourseAnalytics: builder.query<CourseAnalytics, number>({
       query: (courseId) => `/courses/${courseId}/analytics`,
       providesTags: ['Course'],
@@ -362,6 +370,7 @@ export const {
   useGetCoursesQuery,
   useCreateCourseMutation,
   useDeleteCourseMutation,
+  useUpdateCourseMutation,
   useGetCourseAnalyticsQuery,
   useGetAlertConfigQuery,
   useUpdateAlertConfigMutation,
