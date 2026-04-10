@@ -14,6 +14,58 @@ from sqlalchemy.engine import make_url
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "postgresql+psycopg2://postgres:1234@localhost:5432/fyp_test")
 
 
+def _seed_test_data() -> None:
+    from backend.database import SessionLocal
+    from backend.models import Course, User, UserRole
+    from backend.security import hash_password
+
+    with SessionLocal() as db:
+        admin = User(
+            name="Admin User",
+            email="admin@fyp.com",
+            hashed_password=hash_password("admin123"),
+            role=UserRole.ADMIN,
+        )
+        teacher = User(
+            name="Teacher One",
+            email="teacher@fyp.com",
+            hashed_password=hash_password("teacher123"),
+            role=UserRole.TEACHER,
+        )
+        db.add(admin)
+        db.add(teacher)
+        db.flush()
+
+        db.add(
+            Course(
+                course_name="Software Engineering",
+                course_code="CSC361",
+                semester=5,
+                section=1,
+                instructor_id=teacher.id,
+            )
+        )
+        db.add(
+            Course(
+                course_name="Artificial Intelligence",
+                course_code="CSC363",
+                semester=6,
+                section=1,
+                instructor_id=teacher.id,
+            )
+        )
+        db.add(
+            Course(
+                course_name="Database Systems",
+                course_code="CSC352",
+                semester=4,
+                section=1,
+                instructor_id=None,
+            )
+        )
+        db.commit()
+
+
 def _ensure_database_exists(database_url: str) -> None:
     url = make_url(database_url)
     db_name = url.database
@@ -44,9 +96,11 @@ def client() -> TestClient:
     alembic_cfg.set_main_option("sqlalchemy.url", TEST_DATABASE_URL)
     command.upgrade(alembic_cfg, "head")
 
+    _seed_test_data()
+
     from backend.main import app
 
     with TestClient(app) as test_client:
         yield test_client
 
-    command.downgrade(alembic_cfg, "base")
+    # command.downgrade(alembic_cfg, "base") # Schema is dropped anyway

@@ -1,30 +1,53 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAppDispatch } from '../../../app/hooks'
+import { useAppDispatch, useAppSelector } from '../../../app/hooks'
 import { useLoginMutation } from '../../../services/api/apiSlice'
 import { setCredentials } from '../authSlice'
 import { extractRoleFromToken } from '../token'
+import type { UserRole } from '../../../types/auth'
 
 export function LoginPage() {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
+  const role = useAppSelector((state) => state.auth.role)
   const [login, { isLoading }] = useLoginMutation()
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (role === 'admin') {
+      navigate('/admin', { replace: true })
+      return
+    }
+    if (role === 'teacher') {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [navigate, role])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
 
     try {
-      const result = await login({ username, password }).unwrap()
-      const role = extractRoleFromToken(result.access_token)
+      const result = await login({ email, password }).unwrap()
+      const roleFromUser = result.user?.role?.toLowerCase()
+      const normalizedRole: UserRole | null =
+        roleFromUser === 'admin' || roleFromUser === 'teacher'
+          ? roleFromUser
+          : extractRoleFromToken(result.access_token)
 
-      dispatch(setCredentials({ accessToken: result.access_token, role }))
+      dispatch(
+        setCredentials({
+          accessToken: result.access_token,
+          refreshToken: result.refresh_token,
+          role: normalizedRole,
+          user: result.user ?? null,
+        }),
+      )
 
-      if (role === 'admin') {
+      if (normalizedRole === 'admin') {
         navigate('/admin')
         return
       }
@@ -44,15 +67,16 @@ export function LoginPage() {
         <h1 className="text-2xl font-semibold text-slate-900">Welcome Back</h1>
         <p className="mt-1 text-sm text-slate-600">Sign in to continue to your classroom dashboard.</p>
 
-        <label className="mt-6 block text-sm font-medium text-slate-700" htmlFor="username">
-          Username
+        <label className="mt-6 block text-sm font-medium text-slate-700" htmlFor="email">
+          Email
         </label>
         <input
-          id="username"
-          value={username}
-          onChange={(event) => setUsername(event.target.value)}
+          id="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          type="email"
           className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none ring-indigo-500 focus:ring-2"
-          autoComplete="username"
+          autoComplete="email"
           required
         />
 

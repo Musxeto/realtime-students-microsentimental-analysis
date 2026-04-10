@@ -157,11 +157,28 @@ Role behavior:
 
 - GET /health
 - POST /auth/login
+- GET /auth/me
+- POST /auth/refresh
+- POST /auth/logout
+- POST /auth/change-password
 - GET /courses
+- POST /courses
+- DELETE /courses/{course_id}
+- GET /courses/{course_id}/analytics
+- GET /courses/{course_id}/alert-config
+- PUT /courses/{course_id}/alert-config
 - POST /sessions/start
+- GET /sessions
+- GET /sessions/{session_id}
+- GET /sessions/{session_id}/logs
+- GET /sessions/{session_id}/metrics
 - POST /sessions/{session_id}/end
 - WS /sessions/ws/stream/{session_id}
 - POST /admin/teachers
+- GET /admin/teachers
+- PATCH /admin/teachers/{teacher_id}
+- GET /admin/teachers/{teacher_id}/analytics
+- POST /admin/users/{user_id}/reset-password
 
 Swagger docs:
 
@@ -173,10 +190,10 @@ First startup seeds sample users and courses.
 
 Typical credentials:
 
-- admin@fyp.com / password123
-- teacher@fyp.com / password123
-- teacher2@fyp.com / password123
-- teacher3@fyp.com / password123
+- admin@fyp.com / admin123
+- teacher@fyp.com / teacher123
+- teacher2@fyp.com / teacher123
+- teacher3@fyp.com / teacher123
 
 If these are changed in seed scripts, trust the current seed source in [backend/bootstrap.py](backend/bootstrap.py).
 
@@ -205,6 +222,12 @@ Key files:
 - [frontend/src/app/router.tsx](frontend/src/app/router.tsx)
 - [frontend/src/services/api/apiSlice.ts](frontend/src/services/api/apiSlice.ts)
 - [frontend/src/hooks/useSessionWebSocket.ts](frontend/src/hooks/useSessionWebSocket.ts)
+
+Implemented teacher runtime flow:
+
+- Start session from /session/start
+- Live monitoring at /session/{id}
+- Post-session review at /session/{id}/summary
 
 ## Running Tests
 
@@ -255,9 +278,14 @@ npm run build
 
 ## Project Status
 
-- Backend core auth, RBAC, sessions, and streaming are implemented.
-- Frontend foundation and role-based shell are in place.
-- Live UI analytics and admin/teacher feature screens are scaffolded and ready for endpoint wiring.
+- Backend auth, RBAC, admin workflows, course analytics, alert configuration, session metrics, and websocket streaming are implemented.
+- Frontend has role-based login redirects, working admin and teacher dashboards, live session runtime controls, and realtime engagement/alert views.
+- Backend API tests and frontend production build pass on current branch.
+
+Known non-blocking items:
+
+- Backend uses `datetime.utcnow()` in multiple places and emits deprecation warnings under Python 3.12+ test runs.
+- Live session chart bundle is still the largest frontend chunk due to charting/runtime dependencies.
 
 ---
 

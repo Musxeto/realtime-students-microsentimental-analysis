@@ -1,16 +1,46 @@
+import { Suspense, lazy } from 'react'
+import type { ReactElement } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { useAppSelector } from './hooks'
 import { AppLayout } from '../components/layout/AppLayout'
-import { AdminDashboardPage } from '../features/admin/pages/AdminDashboardPage'
-import { LoginPage } from '../features/auth/pages/LoginPage'
 import { ProtectedRoute } from '../features/auth/ProtectedRoute'
-import { LiveSessionPage } from '../features/live-session/pages/LiveSessionPage'
-import { SessionStartPage } from '../features/live-session/pages/SessionStartPage'
-import { TeacherDashboardPage } from '../features/teacher/pages/TeacherDashboardPage'
+
+const LoginPage = lazy(() => import('../features/auth/pages/LoginPage').then((module) => ({ default: module.LoginPage })))
+const UserProfilePage = lazy(() => import('../features/auth/pages/UserProfilePage').then((module) => ({ default: module.UserProfilePage })))
+const AdminDashboardPage = lazy(() => import('../features/admin/pages/AdminDashboardPage').then((module) => ({ default: module.AdminDashboardPage })))
+const TeacherProjectPage = lazy(() => import('../features/admin/pages/TeacherProjectPage').then((module) => ({ default: module.TeacherProjectPage })))
+const TeacherDashboardPage = lazy(() => import('../features/teacher/pages/TeacherDashboardPage').then((module) => ({ default: module.TeacherDashboardPage })))
+const SessionStartPage = lazy(() => import('../features/live-session/pages/SessionStartPage').then((module) => ({ default: module.SessionStartPage })))
+const LiveSessionPage = lazy(() => import('../features/live-session/pages/LiveSessionPage').then((module) => ({ default: module.LiveSessionPage })))
+const SessionSummaryPage = lazy(() => import('../features/live-session/pages/SessionSummaryPage').then((module) => ({ default: module.SessionSummaryPage })))
+
+function PageLoader() {
+  return (
+    <div className="rounded-2xl border border-slate-200/70 bg-white/90 p-6 text-sm text-slate-500 shadow-card">
+      Loading dashboard...
+    </div>
+  )
+}
+
+function withSuspense(element: ReactElement) {
+  return <Suspense fallback={<PageLoader />}>{element}</Suspense>
+}
+
+function HomeRedirect() {
+  const role = useAppSelector((state) => state.auth.role)
+  if (role === 'admin') {
+    return <Navigate to="/admin" replace />
+  }
+  if (role === 'teacher') {
+    return <Navigate to="/dashboard" replace />
+  }
+  return <Navigate to="/login" replace />
+}
 
 export const router = createBrowserRouter([
   {
     path: '/login',
-    element: <LoginPage />,
+    element: withSuspense(<LoginPage />),
   },
   {
     path: '/',
@@ -18,38 +48,62 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/dashboard" replace />,
+        element: <HomeRedirect />,
+      },
+      {
+        path: 'profile',
+        element: withSuspense(
+          <ProtectedRoute allow={['teacher', 'admin']}>
+            <UserProfilePage />
+          </ProtectedRoute>,
+        ),
       },
       {
         path: 'admin',
-        element: (
+        element: withSuspense(
           <ProtectedRoute allow={['admin']}>
             <AdminDashboardPage />
-          </ProtectedRoute>
+          </ProtectedRoute>,
+        ),
+      },
+      {
+        path: 'admin/teachers/:teacherId',
+        element: withSuspense(
+          <ProtectedRoute allow={['admin']}>
+            <TeacherProjectPage />
+          </ProtectedRoute>,
         ),
       },
       {
         path: 'dashboard',
-        element: (
+        element: withSuspense(
           <ProtectedRoute allow={['teacher', 'admin']}>
             <TeacherDashboardPage />
-          </ProtectedRoute>
+          </ProtectedRoute>,
         ),
       },
       {
         path: 'session/start',
-        element: (
+        element: withSuspense(
           <ProtectedRoute allow={['teacher', 'admin']}>
             <SessionStartPage />
-          </ProtectedRoute>
+          </ProtectedRoute>,
         ),
       },
       {
         path: 'session/:id',
-        element: (
+        element: withSuspense(
           <ProtectedRoute allow={['teacher', 'admin']}>
             <LiveSessionPage />
-          </ProtectedRoute>
+          </ProtectedRoute>,
+        ),
+      },
+      {
+        path: 'session/:id/summary',
+        element: withSuspense(
+          <ProtectedRoute allow={['teacher', 'admin']}>
+            <SessionSummaryPage />
+          </ProtectedRoute>,
         ),
       },
     ],

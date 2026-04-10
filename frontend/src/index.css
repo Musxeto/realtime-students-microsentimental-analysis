@@ -1,21 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-	--background: 210 40% 98%;
-	--foreground: 222 47% 11%;
+	--background: 212 40% 97%;
+	--foreground: 221 47% 11%;
 	--card: 0 0% 100%;
-	--card-foreground: 222 47% 11%;
-	--border: 214 32% 91%;
-	--ring: 238 67% 58%;
-	--primary: 238 63% 47%;
+	--card-foreground: 221 47% 11%;
+	--border: 215 30% 89%;
+	--ring: 229 75% 52%;
+	--primary: 228 67% 42%;
 	--primary-foreground: 210 40% 98%;
 	--success: 142 71% 45%;
 	--success-foreground: 210 40% 98%;
-	--warning: 38 92% 50%;
+	--warning: 35 94% 53%;
 	--warning-foreground: 24 9% 10%;
-	--danger: 346 77% 49%;
+	--danger: 351 84% 47%;
 	--danger-foreground: 210 40% 98%;
 }
 
@@ -45,9 +47,39 @@
 		@apply bg-background text-foreground antialiased;
 		margin: 0;
 		min-height: 100vh;
-		font-family: "Inter", "Segoe UI", sans-serif;
-		background-image: radial-gradient(circle at 10% 0%, rgba(99, 102, 241, 0.06), transparent 40%),
-			radial-gradient(circle at 90% 10%, rgba(16, 185, 129, 0.05), transparent 30%);
+		font-family: "Outfit", "Segoe UI", sans-serif;
+		background-image:
+			radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.14), transparent 38%),
+			radial-gradient(circle at 100% 0%, rgba(245, 158, 11, 0.12), transparent 35%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(240, 245, 255, 0.98));
 		background-attachment: fixed;
+	}
+
+	h1,
+	h2,
+	h3 {
+		font-family: "Space Grotesk", "Outfit", sans-serif;
+		letter-spacing: -0.01em;
+	}
+}
+
+@layer utilities {
+	.panel-glow {
+		box-shadow: 0 10px 35px -22px rgba(30, 64, 175, 0.55), 0 8px 20px -18px rgba(245, 158, 11, 0.45);
+	}
+
+	.fade-in-up {
+		animation: fadeInUp 320ms ease-out both;
+	}
+}
+
+@keyframes fadeInUp {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
 	}
 }
