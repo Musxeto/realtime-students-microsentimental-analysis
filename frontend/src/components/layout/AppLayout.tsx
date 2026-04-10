@@ -1,10 +1,8 @@
-import { BarChart3, BookOpenCheck, ShieldCheck, Video } from 'lucide-react'
-import { useState } from 'react'
-import type { FormEvent } from 'react'
+import { BarChart3, BookOpenCheck, ShieldCheck, User, Video } from 'lucide-react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import { logout } from '../../features/auth/authSlice'
-import { useChangePasswordMutation, useLogoutApiMutation } from '../../services/api/apiSlice'
+import { useLogoutApiMutation } from '../../services/api/apiSlice'
 
 const navItems = [
   { to: '/admin', label: 'Admin', icon: ShieldCheck },
@@ -16,13 +14,9 @@ export function AppLayout() {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
   const [logoutApi] = useLogoutApiMutation()
-  const [changePassword, { isLoading: isChangingPassword }] = useChangePasswordMutation()
   const role = useAppSelector((state) => state.auth.role)
   const refreshToken = useAppSelector((state) => state.auth.refreshToken)
   const visibleItems = navItems.filter((item) => item.to !== '/admin' || role === 'admin')
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [passwordMsg, setPasswordMsg] = useState<string | null>(null)
 
   async function onLogout() {
     try {
@@ -32,19 +26,6 @@ export function AppLayout() {
     }
     dispatch(logout())
     navigate('/login', { replace: true })
-  }
-
-  async function onChangePassword(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setPasswordMsg(null)
-    try {
-      await changePassword({ current_password: currentPassword, new_password: newPassword }).unwrap()
-      setPasswordMsg('Password updated. Please log in again.')
-      dispatch(logout())
-      navigate('/login', { replace: true })
-    } catch {
-      setPasswordMsg('Password update failed. Check current password and try again.')
-    }
   }
 
   return (
@@ -59,6 +40,13 @@ export function AppLayout() {
             <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium uppercase text-primary">
               {role ?? 'guest'}
             </span>
+            <Link
+              to="/profile"
+              className="rounded-lg border border-slate-300 p-1.5 text-slate-700 transition hover:bg-white"
+              title="Profile"
+            >
+              <User className="h-4 w-4" />
+            </Link>
             <button
               type="button"
               onClick={onLogout}
@@ -93,36 +81,7 @@ export function AppLayout() {
           </nav>
         </aside>
 
-        <main className="fade-in-up space-y-4">
-          <section className="rounded-xl border border-slate-200 bg-white/90 p-4 shadow-card">
-            <h2 className="text-sm font-semibold text-slate-900">Account Security</h2>
-            <form className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]" onSubmit={onChangePassword}>
-              <input
-                type="password"
-                className="rounded-lg border px-3 py-2 text-sm"
-                placeholder="Current password"
-                value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
-                required
-              />
-              <input
-                type="password"
-                className="rounded-lg border px-3 py-2 text-sm"
-                placeholder="New password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                required
-              />
-              <button
-                type="submit"
-                disabled={isChangingPassword}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                {isChangingPassword ? 'Updating...' : 'Update Password'}
-              </button>
-            </form>
-            {passwordMsg ? <p className="mt-2 text-xs text-slate-600">{passwordMsg}</p> : null}
-          </section>
+        <main className="fade-in-up">
           <Outlet />
         </main>
       </div>

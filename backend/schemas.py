@@ -60,7 +60,10 @@ class CreateTeacherResponse(BaseModel):
 class CourseOut(BaseModel):
     id: int
     course_name: str
-    instructor_id: int
+    course_code: str
+    semester: int
+    section: int
+    instructor_id: int | None
     available_videos: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
@@ -68,11 +71,17 @@ class CourseOut(BaseModel):
 
 class CreateCourseRequest(BaseModel):
     course_name: str = Field(min_length=2, max_length=255)
+    course_code: str | None = Field(default=None, min_length=2, max_length=32)
+    semester: int = Field(default=1, ge=1, le=8)
+    section: int = Field(default=1, ge=1, le=5)
     instructor_id: int | None = None
 
 
 class UpdateCourseRequest(BaseModel):
     course_name: str | None = Field(default=None, min_length=2, max_length=255)
+    course_code: str | None = Field(default=None, min_length=2, max_length=32)
+    semester: int | None = Field(default=None, ge=1, le=8)
+    section: int | None = Field(default=None, ge=1, le=5)
     instructor_id: int | None = None
 
 

@@ -13,6 +13,10 @@ from ..security import hash_password
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
+def _default_code_from_name(name: str) -> str:
+    return name.strip().upper().replace(" ", "-")[:32]
+
+
 @router.get("/teachers", response_model=list[TeacherListItem])
 def list_teachers(admin_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     _ = admin_user
@@ -59,7 +63,13 @@ def create_teacher(payload: CreateTeacherRequest, admin_user: User = Depends(get
         cname = raw_name.strip()
         if not cname:
             continue
-        course = Course(course_name=cname, instructor_id=teacher.id)
+        course = Course(
+            course_name=cname,
+            course_code=_default_code_from_name(cname),
+            semester=1,
+            section=1,
+            instructor_id=teacher.id,
+        )
         db.add(course)
         db.flush()
         created_courses.append(course)
@@ -73,6 +83,9 @@ def create_teacher(payload: CreateTeacherRequest, admin_user: User = Depends(get
             CourseOut(
                 id=course.id,
                 course_name=course.course_name,
+                course_code=course.course_code,
+                semester=course.semester,
+                section=course.section,
                 instructor_id=course.instructor_id,
                 available_videos=[],
             )
@@ -140,6 +153,38 @@ def update_teacher(teacher_id: int, payload: UpdateTeacherRequest, admin_user: U
     db.commit()
     db.refresh(teacher)
     return UserOut.model_validate(teacher)
+
+
+@router.delete("/teachers/{teacher_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_teacher(teacher_id: int, admin_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    _ = admin_user
+    teacher = db.query(User).filter(User.id == teacher_id, User.role == UserRole.TEACHER).first()
+    if teacher is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teacher not found")
+
+    db.query(Course).filter(Course.instructor_id == teacher.id).update({Course.instructor_id: None})
+    db.delete(teacher)
+    db.commit()
+
+
+@router.delete("/teachers", status_code=status.HTTP_204_NO_CONTENT)
+def delete_all_teachers(admin_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    _ = admin_user
+    teachers = db.query(User).filter(User.role == UserRole.TEACHER).all()
+    teacher_ids = [teacher.id for teacher in teachers]
+
+    if teacher_ids:
+        db.query(Course).filter(Course.instructor_id.in_(teacher_ids)).update({Course.instructor_id: None}, synchronize_session=False)
+        for teacher in teachers:
+            db.delete(teacher)
+        db.commit()
+
+
+@router.delete("/courses", status_code=status.HTTP_204_NO_CONTENT)
+def delete_all_courses(admin_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    _ = admin_user
+    db.query(Course).delete(synchronize_session=False)
+    db.commit()
 
 
 @router.post("/users/{user_id}/reset-password")

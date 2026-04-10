@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
-import { AlertCircle, BarChart3, BookOpen, Settings, Users, X } from 'lucide-react'
+import { AlertCircle, BarChart3, BookOpen, Plus, Settings, Users } from 'lucide-react'
 import {
   useAdminResetUserPasswordMutation,
   useCreateCourseMutation,
   useCreateTeacherMutation,
   useDeleteCourseMutation,
-  useGetAlertConfigQuery,
   useGetCoursesQuery,
   useGetTeachersQuery,
   useUpdateAlertConfigMutation,
   useUpdateTeacherMutation,
   useUpdateCourseMutation,
 } from '../../../services/api/apiSlice'
+import { CreateTeacherModal } from '../../../components/modals/CreateTeacherModal'
+import { ResetPasswordModal } from '../../../components/modals/ResetPasswordModal'
+import { CreateCourseModal } from '../../../components/modals/CreateCourseModal'
+import { EditCourseModal } from '../../../components/modals/EditCourseModal'
+import { UpdateAlertConfigModal } from '../../../components/modals/UpdateAlertConfigModal'
 
 type Tab = 'overview' | 'teachers' | 'courses' | 'alerts' | 'settings'
 
@@ -21,54 +24,39 @@ export function AdminDashboardPage() {
   const { data: courses = [] } = useGetCoursesQuery()
   const [createTeacher, { isLoading: creatingTeacher }] = useCreateTeacherMutation()
   const [updateTeacher] = useUpdateTeacherMutation()
-  const [adminResetUserPassword] = useAdminResetUserPasswordMutation()
+  const [adminResetUserPassword, { isLoading: resettingPassword }] = useAdminResetUserPasswordMutation()
   const [createCourse] = useCreateCourseMutation()
-  const [updateCourse] = useUpdateCourseMutation()
+  const [updateCourse, { isLoading: updatingCourse }] = useUpdateCourseMutation()
   const [deleteCourse] = useDeleteCourseMutation()
-  const [updateAlertConfig] = useUpdateAlertConfigMutation()
+  const [updateAlertConfig, { isLoading: updatingAlertConfig }] = useUpdateAlertConfigMutation()
 
   // Tab state
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [feedback, setFeedback] = useState<string | null>(null)
 
-  // Teacher form state
-  const [teacherForm, setTeacherForm] = useState({ name: '', email: '', password: '', courseNames: '' })
-
-  // Course form state
-  const [courseForm, setCourseForm] = useState({ name: '', instructorId: '' })
-  const [editingCourseId, setEditingCourseId] = useState<number | null>(null)
-  const [editingCourseName, setEditingCourseName] = useState('')
+  // Modal states
+  const [isCreateTeacherModalOpen, setIsCreateTeacherModalOpen] = useState(false)
+  const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false)
+  const [resetPasswordUserId, setResetPasswordUserId] = useState<number | null>(null)
+  const [resetPasswordUserName, setResetPasswordUserName] = useState<string>('')
+  const [isCreateCourseModalOpen, setIsCreateCourseModalOpen] = useState(false)
+  const [isEditCourseModalOpen, setIsEditCourseModalOpen] = useState(false)
+  const [editingCourse, setEditingCourse] = useState<{
+    id: number
+    course_name: string
+    course_code: string
+    semester: number
+    section: number
+    instructor_id: number | null
+  } | null>(null)
+  const [isUpdateAlertConfigModalOpen, setIsUpdateAlertConfigModalOpen] = useState(false)
 
   // Alert config state
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null)
-  const { data: selectedAlertConfig } = useGetAlertConfigQuery(selectedCourseId ?? 0, {
-    skip: selectedCourseId == null,
-  })
-  const [alertConfig, setAlertConfig] = useState({ threshold: 50, duration: 180, enabled: true })
-
-  // Teacher analytics state
-  const [selectedTeacherId, setSelectedTeacherId] = useState<number | null>(null)
-  // const { data: teacherAnalytics } = useGetTeacherAnalyticsQuery(selectedTeacherId ?? 0, {
-  //   skip: selectedTeacherId == null,
-  // })
 
   useEffect(() => {
     if (!selectedCourseId && courses.length > 0) setSelectedCourseId(courses[0].id)
   }, [courses, selectedCourseId])
-
-  useEffect(() => {
-    if (!selectedTeacherId && teachers.length > 0) setSelectedTeacherId(teachers[0].id)
-  }, [selectedTeacherId, teachers])
-
-  useEffect(() => {
-    if (selectedAlertConfig) {
-      setAlertConfig({
-        threshold: selectedAlertConfig.engagement_threshold,
-        duration: selectedAlertConfig.duration_seconds,
-        enabled: selectedAlertConfig.enabled,
-      })
-    }
-  }, [selectedAlertConfig])
 
   const showFeedback = (msg: string) => {
     setFeedback(msg)
@@ -76,29 +64,27 @@ export function AdminDashboardPage() {
   }
 
   // TEACHERS
-  async function handleCreateTeacher(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const courseNames = teacherForm.courseNames
+  const handleCreateTeacher = async (data: { name: string; email: string; password: string; courseNames: string }) => {
+    const courseNames = data.courseNames
       .split(',')
       .map((c) => c.trim())
       .filter(Boolean)
 
     try {
       await createTeacher({
-        name: teacherForm.name,
-        email: teacherForm.email,
-        password: teacherForm.password,
+        name: data.name,
+        email: data.email,
+        password: data.password,
         course_names: courseNames,
       }).unwrap()
-
-      setTeacherForm({ name: '', email: '', password: '', courseNames: '' })
       showFeedback('Teacher created successfully.')
+      setIsCreateTeacherModalOpen(false)
     } catch {
-      showFeedback('Failed to create teacher. Check form or email already exists.')
+      throw new Error('Failed to create teacher. Check form or email already exists.')
     }
   }
 
-  async function toggleTeacherStatus(id: number, active: boolean) {
+  const toggleTeacherStatus = async (id: number, active: boolean) => {
     try {
       await updateTeacher({ teacherId: id, payload: { is_active: !active } }).unwrap()
       showFeedback(`Teacher ${!active ? 'activated' : 'deactivated'}.`)
@@ -107,59 +93,63 @@ export function AdminDashboardPage() {
     }
   }
 
-  async function handleResetPassword(userId: number) {
-    const pwd = window.prompt('Enter new password (min 4 chars):')
-    if (!pwd || pwd.length < 4) {
-      showFeedback('Password must be at least 4 characters.')
-      return
-    }
-
+  const handleResetPassword = async (newPassword: string) => {
+    if (!resetPasswordUserId) return
     try {
-      await adminResetUserPassword({ userId, new_password: pwd }).unwrap()
+      await adminResetUserPassword({ userId: resetPasswordUserId, new_password: newPassword }).unwrap()
       showFeedback('Password reset successfully.')
+      setIsResetPasswordModalOpen(false)
     } catch {
-      showFeedback('Failed to reset password.')
+      throw new Error('Failed to reset password.')
     }
+  }
+
+  const openResetPasswordModal = (userId: number, userName: string) => {
+    setResetPasswordUserId(userId)
+    setResetPasswordUserName(userName)
+    setIsResetPasswordModalOpen(true)
   }
 
   // COURSES
-  async function handleCreateCourse(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    if (!courseForm.instructorId) return
-
+  const handleCreateCourse = async (data: {
+    course_name: string
+    course_code?: string
+    semester: number
+    section: number
+    instructor_id?: number | null
+  }) => {
     try {
-      await createCourse({
-        course_name: courseForm.name,
-        instructor_id: parseInt(courseForm.instructorId),
-      }).unwrap()
-
-      setCourseForm({ name: '', instructorId: '' })
+      await createCourse(data).unwrap()
       showFeedback('Course created successfully.')
+      setIsCreateCourseModalOpen(false)
     } catch {
-      showFeedback('Failed to create course.')
+      throw new Error('Failed to create course.')
     }
   }
 
-  async function handleUpdateCourse() {
-    if (!editingCourseId || !editingCourseName.trim()) return
-
+  const handleUpdateCourse = async (data: {
+    course_name?: string
+    course_code?: string
+    semester?: number
+    section?: number
+    instructor_id?: number | null
+  }) => {
+    if (!editingCourse) return
     try {
       await updateCourse({
-        courseId: editingCourseId,
-        payload: { course_name: editingCourseName },
+        courseId: editingCourse.id,
+        payload: data,
       }).unwrap()
-
-      setEditingCourseId(null)
-      setEditingCourseName('')
       showFeedback('Course updated successfully.')
+      setIsEditCourseModalOpen(false)
+      setEditingCourse(null)
     } catch {
-      showFeedback('Failed to update course.')
+      throw new Error('Failed to update course.')
     }
   }
 
-  async function handleDeleteCourse(id: number) {
+  const handleDeleteCourse = async (id: number) => {
     if (!window.confirm('Delete this course?')) return
-
     try {
       await deleteCourse(id).unwrap()
       showFeedback('Course deleted.')
@@ -168,24 +158,38 @@ export function AdminDashboardPage() {
     }
   }
 
-  // ALERTS
-  async function handleUpdateAlertConfig(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    if (!selectedCourseId) return
+  const openEditCourseModal = (course: {
+    id: number
+    course_name: string
+    course_code: string
+    semester: number
+    section: number
+    instructor_id: number | null
+  }) => {
+    setEditingCourse(course)
+    setIsEditCourseModalOpen(true)
+  }
 
+  // ALERTS
+  const handleUpdateAlertConfig = async (data: {
+    course_id: number
+    threshold: number
+    duration: number
+    enabled: boolean
+  }) => {
     try {
       await updateAlertConfig({
-        courseId: selectedCourseId,
+        courseId: data.course_id,
         payload: {
-          engagement_threshold: alertConfig.threshold,
-          duration_seconds: alertConfig.duration,
-          enabled: alertConfig.enabled,
+          engagement_threshold: data.threshold,
+          duration_seconds: data.duration,
+          enabled: data.enabled,
         },
       }).unwrap()
-
       showFeedback('Alert config updated.')
+      setIsUpdateAlertConfigModalOpen(false)
     } catch {
-      showFeedback('Failed to update alert config.')
+      throw new Error('Failed to update alert config.')
     }
   }
 
@@ -209,6 +213,28 @@ export function AdminDashboardPage() {
         </div>
       )}
 
+ {/* TAB NAVIGATION */}
+      <div className="sticky bottom-0 mt-8 border-t border-slate-200 bg-white pt-4">
+        <div className="flex gap-2 overflow-x-auto">
+          {(['overview', 'teachers', 'courses', 'alerts', 'settings'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex items-center gap-2 whitespace-nowrap px-4 py-2 text-sm font-medium transition ${
+                activeTab === tab ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {tab === 'overview' && <BarChart3 className="h-4 w-4" />}
+              {tab === 'teachers' && <Users className="h-4 w-4" />}
+              {tab === 'courses' && <BookOpen className="h-4 w-4" />}
+              {tab === 'alerts' && <AlertCircle className="h-4 w-4" />}
+              {tab === 'settings' && <Settings className="h-4 w-4" />}
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+      
       {/* OVERVIEW TAB */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
@@ -273,21 +299,33 @@ export function AdminDashboardPage() {
             <h2 className="text-lg font-semibold text-slate-900">Quick Actions</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <button
-                onClick={() => setActiveTab('teachers')}
-                className="rounded-lg bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+                onClick={() => {
+                  setActiveTab('teachers')
+                  setIsCreateTeacherModalOpen(true)
+                }}
+                className="flex items-center justify-center gap-2 rounded-lg bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
               >
-                + Add Teacher
+                <Plus className="h-4 w-4" />
+                Add Teacher
               </button>
               <button
-                onClick={() => setActiveTab('courses')}
-                className="rounded-lg bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                onClick={() => {
+                  setActiveTab('courses')
+                  setIsCreateCourseModalOpen(true)
+                }}
+                className="flex items-center justify-center gap-2 rounded-lg bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
               >
-                + Create Course
+                <Plus className="h-4 w-4" />
+                Create Course
               </button>
               <button
-                onClick={() => setActiveTab('alerts')}
-                className="rounded-lg bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100"
+                onClick={() => {
+                  setActiveTab('alerts')
+                  setIsUpdateAlertConfigModalOpen(true)
+                }}
+                className="flex items-center justify-center gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100"
               >
+                <Plus className="h-4 w-4" />
                 Configure Alerts
               </button>
             </div>
@@ -303,14 +341,21 @@ export function AdminDashboardPage() {
                     <p className="font-medium text-slate-900">{t.name}</p>
                     <p className="text-xs text-slate-500">{t.email}</p>
                   </div>
-                  <span className={`rounded-full px-2 py-1 text-xs font-semibold ${t.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>
+                  <span
+                    className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                      t.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
                     {t.is_active ? 'Active' : 'Inactive'}
                   </span>
                 </div>
               ))}
             </div>
             {teachers.length > 3 && (
-              <button onClick={() => setActiveTab('teachers')} className="mt-4 text-sm font-semibold text-blue-600 hover:underline">
+              <button
+                onClick={() => setActiveTab('teachers')}
+                className="mt-4 text-sm font-semibold text-blue-600 hover:underline"
+              >
                 View all {teachers.length} teachers →
               </button>
             )}
@@ -321,54 +366,21 @@ export function AdminDashboardPage() {
       {/* TEACHERS TAB */}
       {activeTab === 'teachers' && (
         <div className="space-y-6">
-          <form onSubmit={handleCreateTeacher} className="rounded-lg border border-slate-200 bg-white p-6">
-            <h2 className="text-lg font-semibold text-slate-900">Create New Teacher</h2>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <input
-                type="text"
-                placeholder="Full name"
-                value={teacherForm.name}
-                onChange={(e) => setTeacherForm({ ...teacherForm, name: e.target.value })}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                required
-              />
-              <input
-                type="email"
-                placeholder="Email address"
-                value={teacherForm.email}
-                onChange={(e) => setTeacherForm({ ...teacherForm, email: e.target.value })}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                required
-              />
-              <input
-                type="password"
-                placeholder="Temporary password"
-                value={teacherForm.password}
-                onChange={(e) => setTeacherForm({ ...teacherForm, password: e.target.value })}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                required
-              />
-              <input
-                type="text"
-                placeholder="Initial courses (comma separated)"
-                value={teacherForm.courseNames}
-                onChange={(e) => setTeacherForm({ ...teacherForm, courseNames: e.target.value })}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              />
+          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-6">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Teachers Management</h2>
+              <p className="mt-1 text-sm text-slate-600">View and manage teacher accounts</p>
             </div>
             <button
-              type="submit"
-              disabled={creatingTeacher}
-              className="mt-4 rounded-lg bg-blue-600 px-6 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:opacity-60"
+              onClick={() => setIsCreateTeacherModalOpen(true)}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
             >
-              {creatingTeacher ? 'Creating...' : 'Create Teacher'}
+              <Plus className="h-4 w-4" />
+              Add Teacher
             </button>
-          </form>
+          </div>
 
           <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
-            <div className="border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-semibold text-slate-900">Teachers Management</h2>
-            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50">
@@ -404,8 +416,8 @@ export function AdminDashboardPage() {
                         <td className="px-6 py-3">
                           <button
                             onClick={() => toggleTeacherStatus(t.id, t.is_active)}
-                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                              t.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'
+                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold transition ${
+                              t.is_active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                             }`}
                           >
                             {t.is_active ? 'Active' : 'Inactive'}
@@ -413,7 +425,7 @@ export function AdminDashboardPage() {
                         </td>
                         <td className="px-6 py-3 text-sm">
                           <button
-                            onClick={() => handleResetPassword(t.id)}
+                            onClick={() => openResetPasswordModal(t.id, t.name)}
                             className="font-semibold text-blue-600 hover:underline"
                           >
                             Reset Password
@@ -432,48 +444,29 @@ export function AdminDashboardPage() {
       {/* COURSES TAB */}
       {activeTab === 'courses' && (
         <div className="space-y-6">
-          <form onSubmit={handleCreateCourse} className="rounded-lg border border-slate-200 bg-white p-6">
-            <h2 className="text-lg font-semibold text-slate-900">Create New Course</h2>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <input
-                type="text"
-                placeholder="Course name"
-                value={courseForm.name}
-                onChange={(e) => setCourseForm({ ...courseForm, name: e.target.value })}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                required
-              />
-              <select
-                value={courseForm.instructorId}
-                onChange={(e) => setCourseForm({ ...courseForm, instructorId: e.target.value })}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                required
-              >
-                <option value="">Select instructor</option>
-                {teachers.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-6">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Courses Management</h2>
+              <p className="mt-1 text-sm text-slate-600">Create and manage courses</p>
             </div>
             <button
-              type="submit"
-              className="mt-4 rounded-lg bg-emerald-600 px-6 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+              onClick={() => setIsCreateCourseModalOpen(true)}
+              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
             >
+              <Plus className="h-4 w-4" />
               Create Course
             </button>
-          </form>
+          </div>
 
           <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
-            <div className="border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-semibold text-slate-900">Courses Management</h2>
-            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50">
                   <tr>
                     <th className="px-6 py-3 font-semibold text-slate-900">Course Name</th>
+                    <th className="px-6 py-3 font-semibold text-slate-900">Code</th>
+                    <th className="px-6 py-3 font-semibold text-slate-900">Semester</th>
+                    <th className="px-6 py-3 font-semibold text-slate-900">Section</th>
                     <th className="px-6 py-3 font-semibold text-slate-900">Instructor</th>
                     <th className="px-6 py-3 font-semibold text-slate-900">Actions</th>
                   </tr>
@@ -481,7 +474,7 @@ export function AdminDashboardPage() {
                 <tbody>
                   {courses.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="px-6 py-8 text-center text-slate-500">
+                      <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
                         No courses yet. Create one above.
                       </td>
                     </tr>
@@ -489,13 +482,13 @@ export function AdminDashboardPage() {
                     courses.map((c) => (
                       <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
                         <td className="px-6 py-3 font-medium text-slate-900">{c.course_name}</td>
-                        <td className="px-6 py-3 text-slate-600">{teachers.find((t) => t.id === c.instructor_id)?.name || 'Unknown'}</td>
+                        <td className="px-6 py-3 text-slate-600">{c.course_code}</td>
+                        <td className="px-6 py-3 text-slate-600">{c.semester}</td>
+                        <td className="px-6 py-3 text-slate-600">{c.section}</td>
+                        <td className="px-6 py-3 text-slate-600">{teachers.find((t) => t.id === c.instructor_id)?.name || 'Unassigned'}</td>
                         <td className="px-6 py-3 text-sm space-x-2">
                           <button
-                            onClick={() => {
-                              setEditingCourseId(c.id)
-                              setEditingCourseName(c.course_name)
-                            }}
+                            onClick={() => openEditCourseModal(c)}
                             className="font-semibold text-blue-600 hover:underline"
                           >
                             Edit
@@ -514,64 +507,22 @@ export function AdminDashboardPage() {
               </table>
             </div>
           </div>
-
-          {/* Edit Course Modal */}
-          {editingCourseId !== null && (
-            <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-              <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-slate-900">Edit Course</h3>
-                  <button
-                    onClick={() => {
-                      setEditingCourseId(null)
-                      setEditingCourseName('')
-                    }}
-                    className="text-slate-400 hover:text-slate-600"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={editingCourseName}
-                  onChange={(e) => setEditingCourseName(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  placeholder="Course name"
-                />
-                <div className="mt-6 flex gap-3">
-                  <button
-                    onClick={handleUpdateCourse}
-                    className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-                  >
-                    Save Changes
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditingCourseId(null)
-                      setEditingCourseName('')
-                    }}
-                    className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
       {/* ALERTS TAB */}
       {activeTab === 'alerts' && (
-        <form onSubmit={handleUpdateAlertConfig} className="rounded-lg border border-slate-200 bg-white p-6">
+        <div className="rounded-lg border border-slate-200 bg-white p-6">
           <h2 className="text-lg font-semibold text-slate-900">Alert Configuration</h2>
-          <div className="mt-6 space-y-6">
+          <p className="mt-1 text-sm text-slate-600">Configure engagement alerts per course</p>
+
+          <div className="mt-6 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Select Course</label>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Select Course</label>
               <select
                 value={selectedCourseId ?? ''}
                 onChange={(e) => setSelectedCourseId(Number(e.target.value))}
-                className="mt-2 w-full rounded-lg border border-slate-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
               >
                 {courses.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -581,54 +532,14 @@ export function AdminDashboardPage() {
               </select>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Engagement Threshold (%)</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={alertConfig.threshold}
-                  onChange={(e) => setAlertConfig({ ...alertConfig, threshold: Number(e.target.value) })}
-                  className="mt-2 w-full rounded-lg border border-slate-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                />
-                <p className="mt-1 text-xs text-slate-500">Alert triggers when engagement falls below this %</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Alert Duration (seconds)</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={alertConfig.duration}
-                  onChange={(e) => setAlertConfig({ ...alertConfig, duration: Number(e.target.value) })}
-                  className="mt-2 w-full rounded-lg border border-slate-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                />
-                <p className="mt-1 text-xs text-slate-500">How long the alert remains active</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="alertEnabled"
-                checked={alertConfig.enabled}
-                onChange={(e) => setAlertConfig({ ...alertConfig, enabled: e.target.checked })}
-                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-              />
-              <label htmlFor="alertEnabled" className="text-sm font-medium text-slate-700">
-                Enable alerts for this course
-              </label>
-            </div>
-
             <button
-              type="submit"
-              className="w-full rounded-lg bg-amber-600 px-6 py-2 text-sm font-semibold text-white transition hover:bg-amber-500"
+              onClick={() => setIsUpdateAlertConfigModalOpen(true)}
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-6 py-2 text-sm font-semibold text-white transition hover:bg-amber-500"
             >
-              Update Alert Configuration
+              Configure for Selected Course
             </button>
           </div>
-        </form>
+        </div>
       )}
 
       {/* SETTINGS TAB */}
@@ -647,27 +558,55 @@ export function AdminDashboardPage() {
         </div>
       )}
 
-      {/* TAB NAVIGATION */}
-      <div className="sticky bottom-0 mt-8 border-t border-slate-200 bg-white pt-4">
-        <div className="flex gap-2 overflow-x-auto">
-          {(['overview', 'teachers', 'courses', 'alerts', 'settings'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex items-center gap-2 whitespace-nowrap px-4 py-2 text-sm font-medium transition ${
-                activeTab === tab ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {tab === 'overview' && <BarChart3 className="h-4 w-4" />}
-              {tab === 'teachers' && <Users className="h-4 w-4" />}
-              {tab === 'courses' && <BookOpen className="h-4 w-4" />}
-              {tab === 'alerts' && <AlertCircle className="h-4 w-4" />}
-              {tab === 'settings' && <Settings className="h-4 w-4" />}
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
+     
+
+      {/* MODALS */}
+      <CreateTeacherModal
+        isOpen={isCreateTeacherModalOpen}
+        onClose={() => setIsCreateTeacherModalOpen(false)}
+        onSubmit={handleCreateTeacher}
+        isLoading={creatingTeacher}
+      />
+
+      <ResetPasswordModal
+        isOpen={isResetPasswordModalOpen}
+        teacherName={resetPasswordUserName}
+        onClose={() => {
+          setIsResetPasswordModalOpen(false)
+          setResetPasswordUserId(null)
+          setResetPasswordUserName('')
+        }}
+        onSubmit={handleResetPassword}
+        isLoading={resettingPassword}
+      />
+
+      <CreateCourseModal
+        isOpen={isCreateCourseModalOpen}
+        onClose={() => setIsCreateCourseModalOpen(false)}
+        teachers={teachers.map((teacher) => ({ id: teacher.id, name: teacher.name }))}
+        onSubmit={handleCreateCourse}
+      />
+
+      <EditCourseModal
+        isOpen={isEditCourseModalOpen}
+        initialCourse={editingCourse ?? undefined}
+        teachers={teachers.map((teacher) => ({ id: teacher.id, name: teacher.name }))}
+        onClose={() => {
+          setIsEditCourseModalOpen(false)
+          setEditingCourse(null)
+        }}
+        onSubmit={handleUpdateCourse}
+        isLoading={updatingCourse}
+      />
+
+      <UpdateAlertConfigModal
+        isOpen={isUpdateAlertConfigModalOpen}
+        courseId={selectedCourseId ?? undefined}
+        courseName={courses.find((c) => c.id === selectedCourseId)?.course_name}
+        onClose={() => setIsUpdateAlertConfigModalOpen(false)}
+        onSubmit={handleUpdateAlertConfig}
+        isLoading={updatingAlertConfig}
+      />
     </div>
   )
 }

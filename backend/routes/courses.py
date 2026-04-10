@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ai.inference_utils import discover_video_files
@@ -16,6 +17,12 @@ from ..schemas import AlertConfigOut, AlertConfigRequest, CourseAnalyticsRespons
 router = APIRouter(prefix="/courses", tags=["courses"])
 
 
+def _normalize_course_code(raw: str | None, fallback_name: str) -> str:
+    if raw and raw.strip():
+        return raw.strip().upper().replace(" ", "")
+    return fallback_name.strip().upper().replace(" ", "-")[:32]
+
+
 @router.post("", response_model=CourseOut)
 def create_course(payload: CreateCourseRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     instructor_id = payload.instructor_id
@@ -23,18 +30,38 @@ def create_course(payload: CreateCourseRequest, current_user: User = Depends(get
         if instructor_id is not None and instructor_id != current_user.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Teachers can only create their own courses")
         instructor_id = current_user.id
-    elif instructor_id is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="instructor_id is required for admin")
 
-    teacher = db.query(User).filter(User.id == instructor_id, User.role == UserRole.TEACHER).first()
-    if teacher is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+    if instructor_id is not None:
+        teacher = db.query(User).filter(User.id == instructor_id, User.role == UserRole.TEACHER).first()
+        if teacher is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
 
-    course = Course(course_name=payload.course_name.strip(), instructor_id=instructor_id)
+    course = Course(
+        course_name=payload.course_name.strip(),
+        course_code=_normalize_course_code(payload.course_code, payload.course_name),
+        semester=payload.semester,
+        section=payload.section,
+        instructor_id=instructor_id,
+    )
     db.add(course)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Course with same code, semester, and section already exists",
+        )
     db.refresh(course)
-    return CourseOut(id=course.id, course_name=course.course_name, instructor_id=course.instructor_id, available_videos=[])
+    return CourseOut(
+        id=course.id,
+        course_name=course.course_name,
+        course_code=course.course_code,
+        semester=course.semester,
+        section=course.section,
+        instructor_id=course.instructor_id,
+        available_videos=[],
+    )
 
 
 @router.get("", response_model=list[CourseOut])
@@ -50,6 +77,9 @@ def list_courses(current_user: User = Depends(get_current_user), db: Session = D
             CourseOut(
                 id=course.id,
                 course_name=course.course_name,
+                course_code=course.course_code,
+                semester=course.semester,
+                section=course.section,
                 instructor_id=course.instructor_id,
                 available_videos=videos,
             )
@@ -115,18 +145,43 @@ def update_course(course_id: int, payload: UpdateCourseRequest, current_user: Us
     
     if payload.course_name is not None:
         course.course_name = payload.course_name.strip()
+    if payload.course_code is not None:
+        course.course_code = _normalize_course_code(payload.course_code, course.course_name)
+    if payload.semester is not None:
+        course.semester = payload.semester
+    if payload.section is not None:
+        course.section = payload.section
     
-    if payload.instructor_id is not None:
-        if current_user.role != UserRole.ADMIN:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can transfer course ownership")
-        teacher = db.query(User).filter(User.id == payload.instructor_id, User.role == UserRole.TEACHER).first()
-        if teacher is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
-        course.instructor_id = payload.instructor_id
+    if current_user.role == UserRole.ADMIN:
+        if "instructor_id" in payload.model_fields_set:
+            if payload.instructor_id is None:
+                course.instructor_id = None
+            else:
+                teacher = db.query(User).filter(User.id == payload.instructor_id, User.role == UserRole.TEACHER).first()
+                if teacher is None:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+                course.instructor_id = payload.instructor_id
+    elif payload.instructor_id is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can transfer course ownership")
     
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Course with same code, semester, and section already exists",
+        )
     db.refresh(course)
-    return CourseOut(id=course.id, course_name=course.course_name, instructor_id=course.instructor_id, available_videos=[])
+    return CourseOut(
+        id=course.id,
+        course_name=course.course_name,
+        course_code=course.course_code,
+        semester=course.semester,
+        section=course.section,
+        instructor_id=course.instructor_id,
+        available_videos=[],
+    )
 
 
 @router.delete("/{course_id}", status_code=status.HTTP_204_NO_CONTENT)

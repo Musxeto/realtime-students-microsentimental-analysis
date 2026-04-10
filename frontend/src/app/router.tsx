@@ -6,6 +6,7 @@ import { AppLayout } from '../components/layout/AppLayout'
 import { ProtectedRoute } from '../features/auth/ProtectedRoute'
 
 const LoginPage = lazy(() => import('../features/auth/pages/LoginPage').then((module) => ({ default: module.LoginPage })))
+const UserProfilePage = lazy(() => import('../features/auth/pages/UserProfilePage').then((module) => ({ default: module.UserProfilePage })))
 const AdminDashboardPage = lazy(() => import('../features/admin/pages/AdminDashboardPage').then((module) => ({ default: module.AdminDashboardPage })))
 const TeacherDashboardPage = lazy(() => import('../features/teacher/pages/TeacherDashboardPage').then((module) => ({ default: module.TeacherDashboardPage })))
 const SessionStartPage = lazy(() => import('../features/live-session/pages/SessionStartPage').then((module) => ({ default: module.SessionStartPage })))
@@ -47,6 +48,14 @@ export const router = createBrowserRouter([
       {
         index: true,
         element: <HomeRedirect />,
+      },
+      {
+        path: 'profile',
+        element: withSuspense(
+          <ProtectedRoute allow={['teacher', 'admin']}>
+            <UserProfilePage />
+          </ProtectedRoute>,
+        ),
       },
       {
         path: 'admin',

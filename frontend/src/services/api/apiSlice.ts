@@ -8,7 +8,10 @@ import { logout, setCredentials, setCurrentUser } from '../../features/auth/auth
 export interface Course {
   id: number
   course_name: string
-  instructor_id: number
+  course_code: string
+  semester: number
+  section: number
+  instructor_id: number | null
   available_videos: string[]
 }
 
@@ -132,7 +135,18 @@ export interface UpdateTeacherRequest {
 
 export interface CreateCourseRequest {
   course_name: string
-  instructor_id?: number
+  course_code?: string
+  semester?: number
+  section?: number
+  instructor_id?: number | null
+}
+
+export interface UpdateCoursePayload {
+  course_name?: string
+  course_code?: string
+  semester?: number
+  section?: number
+  instructor_id?: number | null
 }
 
 const rawBaseQuery = fetchBaseQuery({
@@ -255,7 +269,7 @@ export const apiSlice = createApi({
       }),
       invalidatesTags: ['Course', 'Session'],
     }),
-    updateCourse: builder.mutation<Course, { courseId: number; payload: { course_name?: string; instructor_id?: number } }>({
+    updateCourse: builder.mutation<Course, { courseId: number; payload: UpdateCoursePayload }>({
       query: ({ courseId, payload }) => ({
         url: `/courses/${courseId}`,
         method: 'PATCH',

@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Enum, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from .database import Base
@@ -33,15 +33,21 @@ class User(Base):
     token_version = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    courses = relationship("Course", back_populates="instructor", cascade="all, delete-orphan")
+    courses = relationship("Course", back_populates="instructor")
 
 
 class Course(Base):
     __tablename__ = "courses"
+    __table_args__ = (
+        UniqueConstraint("course_code", "semester", "section", name="uq_courses_code_semester_section"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     course_name = Column(String(255), nullable=False)
-    instructor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    course_code = Column(String(32), nullable=False)
+    semester = Column(Integer, nullable=False)
+    section = Column(Integer, nullable=False)
+    instructor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     instructor = relationship("User", back_populates="courses")
