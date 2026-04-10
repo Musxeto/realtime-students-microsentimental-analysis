@@ -118,7 +118,8 @@ def test_auth_me_refresh_logout_and_change_password(client):
 
     # Restore teacher password for deterministic future test runs.
     admin_token = _login(client, "admin@fyp.com", "admin123")
-    teachers = client.get("/admin/teachers", headers={"Authorization": f"Bearer {admin_token}"}).json()
+    teachers_data = client.get("/admin/teachers", params={"limit": 100}, headers={"Authorization": f"Bearer {admin_token}"}).json()
+    teachers = teachers_data["items"]
     teacher = next((row for row in teachers if row["email"] == "teacher@fyp.com"), None)
     assert teacher is not None
     reset_res = client.post(
@@ -172,7 +173,8 @@ def test_session_start_end_and_websocket_stream(client, monkeypatch):
 
     monkeypatch.setattr(inference_service, "stream_video", _MockStream())
 
-    videos = client.get("/courses", headers={"Authorization": f"Bearer {admin_token}"}).json()
+    videos_data = client.get("/courses", params={"limit": 100}, headers={"Authorization": f"Bearer {admin_token}"}).json()
+    videos = videos_data["items"]
     assert len(videos) > 0
     video_path = videos[0]["available_videos"][0] if videos[0]["available_videos"] else "tests/test_video.mp4"
 
@@ -202,7 +204,8 @@ def test_sessions_list_and_detail_endpoints(client, monkeypatch):
 
     monkeypatch.setattr(inference_service, "stream_video", _MockStream())
 
-    courses = client.get("/courses", headers={"Authorization": f"Bearer {admin_token}"}).json()
+    courses_data = client.get("/courses", params={"limit": 100}, headers={"Authorization": f"Bearer {admin_token}"}).json()
+    courses = courses_data["items"]
     assert len(courses) > 0
     course_id = courses[0]["id"]
     video_path = courses[0]["available_videos"][0] if courses[0]["available_videos"] else "tests/test_video.mp4"
@@ -236,7 +239,8 @@ def test_session_logs_and_analytics_endpoints(client, monkeypatch):
 
     monkeypatch.setattr(inference_service, "stream_video", _MockStream())
 
-    courses = client.get("/courses", headers={"Authorization": f"Bearer {admin_token}"}).json()
+    courses_data = client.get("/courses", params={"limit": 100}, headers={"Authorization": f"Bearer {admin_token}"}).json()
+    courses = courses_data["items"]
     assert len(courses) > 0
     course = courses[0]
     video_path = course["available_videos"][0] if course["available_videos"] else "tests/test_video.mp4"
@@ -274,10 +278,9 @@ def test_session_logs_and_analytics_endpoints(client, monkeypatch):
 
 def test_admin_teacher_management_and_course_crud(client):
     admin_token = _login(client, "admin@fyp.com", "admin123")
-
-    teachers_res = client.get("/admin/teachers", headers={"Authorization": f"Bearer {admin_token}"})
+    teachers_res = client.get("/admin/teachers", params={"limit": 100}, headers={"Authorization": f"Bearer {admin_token}"})
     assert teachers_res.status_code == 200
-    teachers = teachers_res.json()
+    teachers = teachers_res.json()["items"]
     assert len(teachers) >= 1
 
     target_teacher = next((t for t in teachers if t["email"] == "teacher@fyp.com"), teachers[0])
@@ -316,7 +319,8 @@ def test_alert_config_and_session_metrics(client, monkeypatch):
     admin_token = _login(client, "admin@fyp.com", "admin123")
     monkeypatch.setattr(inference_service, "stream_video", _LowEngagementStream())
 
-    courses = client.get("/courses", headers={"Authorization": f"Bearer {admin_token}"}).json()
+    courses_data = client.get("/courses", params={"limit": 100}, headers={"Authorization": f"Bearer {admin_token}"}).json()
+    courses = courses_data["items"]
     course = courses[0]
 
     config_res = client.put(

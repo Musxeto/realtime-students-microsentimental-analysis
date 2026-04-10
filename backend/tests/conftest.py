@@ -55,4 +55,4 @@ def client() -> TestClient:
     with TestClient(app) as test_client:
         yield test_client
 
-    command.downgrade(alembic_cfg, "base")
+    # command.downgrade(alembic_cfg, "base") # Schema is dropped anyway

@@ -17,6 +17,7 @@ export function LiveSessionPage() {
   const engagedCount = lastJsonMessage?.engaged_count ?? 0
   const distractedCount = lastJsonMessage?.distracted_count ?? 0
   const alertState = lastJsonMessage?.alert_state
+  const [alertHistory, setAlertHistory] = useState<Array<{ id: number; msg: string; time: string }>>([])
 
   useEffect(() => {
     if (!lastJsonMessage) {
@@ -32,7 +33,28 @@ export function LiveSessionPage() {
       const next = [...prev, { time: timeLabel, engagement: lastJsonMessage.engagement_score ?? 0 }]
       return next.slice(-120)
     })
-  }, [lastJsonMessage])
+
+    // Log alerts in history if they are new
+    if (lastJsonMessage.alert_state?.active) {
+      const existing = alertHistory.find((h) => h.msg === lastJsonMessage.alert_state?.reason)
+      if (!existing) {
+        setAlertHistory((prev) => [
+          {
+            id: Date.now(),
+            msg: lastJsonMessage.alert_state?.reason || 'Low engagement detected',
+            time: new Date().toLocaleTimeString(),
+          },
+          ...prev,
+        ].slice(0, 5))
+      }
+    } else if (lastJsonMessage.message && !lastJsonMessage.alert_state?.active) {
+      // General system messages
+      setAlertHistory((prev) => [
+          { id: Date.now(), msg: lastJsonMessage.message!, time: new Date().toLocaleTimeString() },
+          ...prev,
+      ].slice(0, 5))
+    }
+  }, [lastJsonMessage, alertHistory])
 
   const engagementBreakdown = useMemo(
     () => [
@@ -127,15 +149,36 @@ export function LiveSessionPage() {
           />
         </Card>
 
-        <Card decoration="top" decorationColor="rose">
-          <Title>AI Co-Pilot Alert</Title>
-          <Text>
+        <Card decoration="top" decorationColor={alertState?.active ? 'rose' : 'slate'}>
+          <Title className="flex items-center gap-2">
+            AI Co-Pilot Alert
+            {alertState?.active && (
+              <span className="flex h-2 w-2 animate-ping rounded-full bg-rose-500" />
+            )}
+          </Title>
+          <Text className={`mt-2 ${alertState?.active ? 'font-semibold text-rose-600' : ''}`}>
             {alertState?.active
               ? alertState.reason || 'Low engagement alert is active.'
               : lastJsonMessage?.message
                 ? lastJsonMessage.message
                 : 'No intervention required yet. Alerts will appear on sustained low engagement.'}
           </Text>
+        </Card>
+
+        <Card>
+          <Title className="text-sm">Intervention History</Title>
+          <div className="mt-4 space-y-3">
+            {alertHistory.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No events logged yet.</p>
+            ) : (
+              alertHistory.map((h) => (
+                <div key={h.id} className="flex flex-col border-l-2 border-slate-200 pl-3">
+                  <p className="text-xs font-semibold text-slate-800">{h.msg}</p>
+                  <p className="text-[10px] text-slate-400">{h.time}</p>
+                </div>
+              ))
+            )}
+          </div>
         </Card>
       </div>
     </section>

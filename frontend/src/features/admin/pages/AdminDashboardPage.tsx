@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertCircle, BarChart3, BookOpen, KeyRound, LineChart, Pencil, Plus, Settings, Sparkles, Trash2, Users } from 'lucide-react'
+import { AlertCircle, BarChart3, BookOpen, ChevronLeft, ChevronRight, Filter, KeyRound, LineChart, Pencil, Plus, Search, Settings, Sparkles, Trash2, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
   useAdminResetUserPasswordMutation,
@@ -21,8 +21,6 @@ import { UpdateAlertConfigModal } from '../../../components/modals/UpdateAlertCo
 type Tab = 'overview' | 'teachers' | 'courses' | 'alerts' | 'settings'
 
 export function AdminDashboardPage() {
-  const { data: teachers = [], isLoading: teachersLoading } = useGetTeachersQuery()
-  const { data: courses = [] } = useGetCoursesQuery()
   const [createTeacher, { isLoading: creatingTeacher }] = useCreateTeacherMutation()
   const [updateTeacher] = useUpdateTeacherMutation()
   const [adminResetUserPassword, { isLoading: resettingPassword }] = useAdminResetUserPasswordMutation()
@@ -30,6 +28,40 @@ export function AdminDashboardPage() {
   const [updateCourse, { isLoading: updatingCourse }] = useUpdateCourseMutation()
   const [deleteCourse] = useDeleteCourseMutation()
   const [updateAlertConfig, { isLoading: updatingAlertConfig }] = useUpdateAlertConfigMutation()
+
+  // Teachers query state
+  const [teacherSearch, setTeacherSearch] = useState('')
+  const [teacherStatus, setTeacherStatus] = useState<'all' | 'active' | 'inactive'>('all')
+  const [teacherPage, setTeacherPage] = useState(0)
+  const pageSize = 10
+
+  // Courses query state
+  const [courseSearch, setCourseSearch] = useState('')
+  const [courseSemester, setCourseSemester] = useState<number | 'all'>('all')
+  const [courseSection, setCourseSection] = useState<number | 'all'>('all')
+  const [courseInstructor, setCourseInstructor] = useState<number | 'all'>('all')
+  const [coursePage, setCoursePage] = useState(0)
+
+  const { data: teachersData, isLoading: teachersLoading } = useGetTeachersQuery({
+    search: teacherSearch || undefined,
+    is_active: teacherStatus === 'all' ? undefined : teacherStatus === 'active',
+    limit: pageSize,
+    offset: teacherPage * pageSize,
+  })
+
+  const { data: coursesData } = useGetCoursesQuery({
+    search: courseSearch || undefined,
+    semester: courseSemester === 'all' ? undefined : (courseSemester as number),
+    section: courseSection === 'all' ? undefined : (courseSection as number),
+    instructor_id: courseInstructor === 'all' ? undefined : (courseInstructor as number),
+    limit: pageSize,
+    offset: coursePage * pageSize,
+  })
+
+  const teachers = teachersData?.items ?? []
+  const teachersTotal = teachersData?.total ?? 0
+  const courses = coursesData?.items ?? []
+  const coursesTotal = coursesData?.total ?? 0
 
   // Tab state
   const [activeTab, setActiveTab] = useState<Tab>('overview')
@@ -372,18 +404,51 @@ export function AdminDashboardPage() {
       {/* TEACHERS TAB */}
       {activeTab === 'teachers' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Teachers Management</h2>
-              <p className="mt-1 text-sm text-slate-600">View and manage teacher accounts</p>
+          <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Teachers Management</h2>
+                <p className="mt-1 text-sm text-slate-600">View and manage teacher accounts</p>
+              </div>
+              <button
+                onClick={() => setIsCreateTeacherModalOpen(true)}
+                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
+              >
+                <Plus className="h-4 w-4" />
+                Add Teacher
+              </button>
             </div>
-            <button
-              onClick={() => setIsCreateTeacherModalOpen(true)}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-            >
-              <Plus className="h-4 w-4" />
-              Add Teacher
-            </button>
+            
+            <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+              <div className="relative flex-1 min-w-[240px]">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name or email..."
+                  value={teacherSearch}
+                  onChange={(e) => {
+                    setTeacherSearch(e.target.value)
+                    setTeacherPage(0)
+                  }}
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-10 pr-4 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex items-center gap-2 min-w-[160px]">
+                <Filter className="h-4 w-4 text-slate-400" />
+                <select
+                  value={teacherStatus}
+                  onChange={(e) => {
+                    setTeacherStatus(e.target.value as any)
+                    setTeacherPage(0)
+                  }}
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="all">All Status</option>
+                  <option value="active">Active Only</option>
+                  <option value="inactive">Inactive Only</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -406,10 +471,10 @@ export function AdminDashboardPage() {
                         Loading teachers...
                       </td>
                     </tr>
-                  ) : teachers.length === 0 ? (
+                  ) : (teachers.length === 0 && !teachersLoading) ? (
                     <tr>
                       <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
-                        No teachers yet. Create one above.
+                        No teachers found. Try adjusting your search/filter markers.
                       </td>
                     </tr>
                   ) : (
@@ -455,6 +520,33 @@ export function AdminDashboardPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-6 py-3">
+              <div className="text-sm text-slate-500">
+                Showing <span className="font-medium">{teachers.length > 0 ? teacherPage * pageSize + 1 : 0}</span> to{' '}
+                <span className="font-medium">{Math.min((teacherPage + 1) * pageSize, teachersTotal)}</span> of{' '}
+                <span className="font-medium">{teachersTotal}</span> results
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setTeacherPage((p) => Math.max(0, p - 1))}
+                  disabled={teacherPage === 0}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </button>
+                <button
+                  onClick={() => setTeacherPage((p) => p + 1)}
+                  disabled={(teacherPage + 1) * pageSize >= teachersTotal}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -462,18 +554,76 @@ export function AdminDashboardPage() {
       {/* COURSES TAB */}
       {activeTab === 'courses' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Courses Management</h2>
-              <p className="mt-1 text-sm text-slate-600">Create and manage courses</p>
+          <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Courses Management</h2>
+                <p className="mt-1 text-sm text-slate-600">Create and manage courses</p>
+              </div>
+              <button
+                onClick={() => setIsCreateCourseModalOpen(true)}
+                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+              >
+                <Plus className="h-4 w-4" />
+                Create Course
+              </button>
             </div>
-            <button
-              onClick={() => setIsCreateCourseModalOpen(true)}
-              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
-            >
-              <Plus className="h-4 w-4" />
-              Create Course
-            </button>
+
+            <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name or code..."
+                  value={courseSearch}
+                  onChange={(e) => {
+                    setCourseSearch(e.target.value)
+                    setCoursePage(0)
+                  }}
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-10 pr-4 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+              <select
+                value={courseSemester}
+                onChange={(e) => {
+                  setCourseSemester(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                  setCoursePage(0)
+                }}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+              >
+                <option value="all">All Semesters</option>
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                  <option key={s} value={s}>Semester {s}</option>
+                ))}
+              </select>
+              <select
+                value={courseSection}
+                onChange={(e) => {
+                  setCourseSection(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                  setCoursePage(0)
+                }}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+              >
+                <option value="all">All Sections</option>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <option key={s} value={s}>Section {s}</option>
+                ))}
+              </select>
+              <select
+                value={courseInstructor}
+                onChange={(e) => {
+                  setCourseInstructor(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                  setCoursePage(0)
+                }}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+              >
+                <option value="all">All Instructors</option>
+                {/* We can use all teachers found so far if we want, or just a generic list */}
+                {teachers.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -493,7 +643,7 @@ export function AdminDashboardPage() {
                   {courses.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
-                        No courses yet. Create one above.
+                        No courses found. Try adjusting your search/filters.
                       </td>
                     </tr>
                   ) : (
@@ -529,6 +679,33 @@ export function AdminDashboardPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-6 py-3">
+              <div className="text-sm text-slate-500">
+                Showing <span className="font-medium">{courses.length > 0 ? coursePage * pageSize + 1 : 0}</span> to{' '}
+                <span className="font-medium">{Math.min((coursePage + 1) * pageSize, coursesTotal)}</span> of{' '}
+                <span className="font-medium">{coursesTotal}</span> results
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCoursePage((p) => Math.max(0, p - 1))}
+                  disabled={coursePage === 0}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </button>
+                <button
+                  onClick={() => setCoursePage((p) => p + 1)}
+                  disabled={(coursePage + 1) * pageSize >= coursesTotal}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

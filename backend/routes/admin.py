@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import get_admin_user
 from ..models import ClassSession, Course, User, UserRole
-from ..schemas import CourseOut, CreateTeacherRequest, CreateTeacherResponse, ResetPasswordRequest, TeacherAnalyticsResponse, TeacherCourseAnalytics, TeacherCourseDetailAnalytics, TeacherListItem, TeacherProjectPageResponse, TeacherSessionAnalytics, UpdateTeacherRequest, UserOut
+from ..schemas import CourseOut, CreateTeacherRequest, CreateTeacherResponse, ResetPasswordRequest, TeacherAnalyticsResponse, TeacherCourseAnalytics, TeacherCourseDetailAnalytics, TeacherListItem, TeacherListResponse, TeacherProjectPageResponse, TeacherSessionAnalytics, UpdateTeacherRequest, UserOut
 from ..security import hash_password
 
 
@@ -17,10 +18,28 @@ def _default_code_from_name(name: str) -> str:
     return name.strip().upper().replace(" ", "-")[:32]
 
 
-@router.get("/teachers", response_model=list[TeacherListItem])
-def list_teachers(admin_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+@router.get("/teachers", response_model=TeacherListResponse)
+def list_teachers(
+    search: str | None = Query(default=None),
+    is_active: bool | None = Query(default=None),
+    limit: int = Query(default=10, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    admin_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
     _ = admin_user
-    teachers = db.query(User).filter(User.role == UserRole.TEACHER).order_by(User.name.asc()).all()
+    query = db.query(User).filter(User.role == UserRole.TEACHER)
+
+    if search:
+        search_term = f"%{search.strip()}%"
+        query = query.filter(or_(User.name.ilike(search_term), User.email.ilike(search_term)))
+
+    if is_active is not None:
+        query = query.filter(User.is_active == is_active)
+
+    total = query.count()
+    teachers = query.order_by(User.name.asc()).offset(offset).limit(limit).all()
+
     rows: list[TeacherListItem] = []
     for teacher in teachers:
         course_ids = [course.id for course in db.query(Course).filter(Course.instructor_id == teacher.id).all()]
@@ -39,7 +58,7 @@ def list_teachers(admin_user: User = Depends(get_admin_user), db: Session = Depe
                 session_count=session_count,
             )
         )
-    return rows
+    return TeacherListResponse(items=rows, total=total, limit=limit, offset=offset)
 
 
 @router.post("/teachers", response_model=CreateTeacherResponse)

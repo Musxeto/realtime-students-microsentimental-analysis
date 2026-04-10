@@ -15,6 +15,13 @@ export interface Course {
   available_videos: string[]
 }
 
+export interface CourseListResponse {
+  items: Course[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export interface StartSessionRequest {
   course_id: number
   video_path: string
@@ -110,6 +117,13 @@ export interface TeacherListItem {
   is_active: boolean
   course_count: number
   session_count: number
+}
+
+export interface TeacherListResponse {
+  items: TeacherListItem[]
+  total: number
+  limit: number
+  offset: number
 }
 
 export interface TeacherProjectCourse {
@@ -286,8 +300,14 @@ export const apiSlice = createApi({
         body,
       }),
     }),
-    getCourses: builder.query<Course[], void>({
-      query: () => '/courses',
+    getCourses: builder.query<
+      CourseListResponse,
+      { search?: string; semester?: number; section?: number; instructor_id?: number | null; limit?: number; offset?: number } | void
+    >({
+      query: (params) => ({
+        url: '/courses',
+        params: params || undefined,
+      }),
       providesTags: ['Course'],
     }),
     createCourse: builder.mutation<Course, CreateCourseRequest>({
@@ -369,8 +389,14 @@ export const apiSlice = createApi({
       query: (sessionId) => `/sessions/${sessionId}/metrics`,
       providesTags: ['Session'],
     }),
-    getTeachers: builder.query<TeacherListItem[], void>({
-      query: () => '/admin/teachers',
+    getTeachers: builder.query<
+      TeacherListResponse,
+      { search?: string; is_active?: boolean; limit?: number; offset?: number } | void
+    >({
+      query: (params) => ({
+        url: '/admin/teachers',
+        params: params || undefined,
+      }),
       providesTags: ['Teacher'],
     }),
     createTeacher: builder.mutation<CreateTeacherResponse, CreateTeacherRequest>({

@@ -69,6 +69,13 @@ class CourseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CourseListResponse(BaseModel):
+    items: list[CourseOut]
+    total: int
+    limit: int
+    offset: int
+
+
 class CreateCourseRequest(BaseModel):
     course_name: str = Field(min_length=2, max_length=255)
     course_code: str | None = Field(default=None, min_length=2, max_length=32)
@@ -93,6 +100,13 @@ class TeacherListItem(BaseModel):
     is_active: bool
     course_count: int
     session_count: int
+
+
+class TeacherListResponse(BaseModel):
+    items: list[TeacherListItem]
+    total: int
+    limit: int
+    offset: int
 
 
 class UpdateTeacherRequest(BaseModel):

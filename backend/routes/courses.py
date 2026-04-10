@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -11,7 +11,7 @@ from ..config import settings
 from ..database import get_db
 from ..deps import get_admin_user, get_current_user
 from ..models import AlertConfig, ClassSession, Course, User, UserRole
-from ..schemas import AlertConfigOut, AlertConfigRequest, CourseAnalyticsResponse, CourseOut, CreateCourseRequest, UpdateCourseRequest, SessionScorePoint
+from ..schemas import AlertConfigOut, AlertConfigRequest, CourseAnalyticsResponse, CourseListResponse, CourseOut, CreateCourseRequest, UpdateCourseRequest, SessionScorePoint
 
 
 router = APIRouter(prefix="/courses", tags=["courses"])
@@ -64,15 +64,43 @@ def create_course(payload: CreateCourseRequest, current_user: User = Depends(get
     )
 
 
-@router.get("", response_model=list[CourseOut])
-def list_courses(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+@router.get("", response_model=CourseListResponse)
+def list_courses(
+    search: str | None = Query(default=None),
+    semester: int | None = Query(default=None),
+    section: int | None = Query(default=None),
+    instructor_id: int | None = Query(default=None),
+    limit: int = Query(default=10, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     query = db.query(Course)
     if current_user.role != UserRole.ADMIN:
         query = query.filter(Course.instructor_id == current_user.id)
+    else:
+        # Admin can filter by instructor
+        if instructor_id is not None:
+            query = query.filter(Course.instructor_id == instructor_id)
 
-    videos = [str(path.relative_to(settings.video_root)) if path.is_relative_to(settings.video_root) else str(path) for path in discover_video_files([settings.video_root, settings.ai_dir])]
+    if search:
+        search_term = f"%{search.strip()}%"
+        query = query.filter(or_(Course.course_name.ilike(search_term), Course.course_code.ilike(search_term)))
+
+    if semester is not None:
+        query = query.filter(Course.semester == semester)
+    if section is not None:
+        query = query.filter(Course.section == section)
+
+    total = query.count()
+    rows = query.order_by(Course.semester.asc(), Course.course_name.asc()).offset(offset).limit(limit).all()
+
+    videos = [
+        str(path.relative_to(settings.video_root)) if path.is_relative_to(settings.video_root) else str(path)
+        for path in discover_video_files([settings.video_root, settings.ai_dir])
+    ]
     courses = []
-    for course in query.all():
+    for course in rows:
         courses.append(
             CourseOut(
                 id=course.id,
@@ -84,7 +112,7 @@ def list_courses(current_user: User = Depends(get_current_user), db: Session = D
                 available_videos=videos,
             )
         )
-    return courses
+    return CourseListResponse(items=courses, total=total, limit=limit, offset=offset)
 
 
 @router.get("/{course_id}/analytics", response_model=CourseAnalyticsResponse)
