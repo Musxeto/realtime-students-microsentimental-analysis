@@ -112,6 +112,42 @@ export interface TeacherListItem {
   session_count: number
 }
 
+export interface TeacherProjectCourse {
+  course_id: number
+  course_name: string
+  course_code: string
+  semester: number
+  section: number
+  sessions_count: number
+  completed_sessions_count: number
+  avg_final_score: number | null
+  peak_final_score: number | null
+  lowest_final_score: number | null
+}
+
+export interface TeacherProjectSession {
+  session_id: number
+  course_id: number
+  course_name: string
+  start_time: string
+  end_time: string | null
+  status: string
+  final_avg_score: number | null
+}
+
+export interface TeacherProjectPageResponse {
+  teacher_id: number
+  teacher_name: string
+  teacher_email: string
+  is_active: boolean
+  total_courses: number
+  total_sessions: number
+  completed_sessions_count: number
+  overall_avg_final_score: number | null
+  courses: TeacherProjectCourse[]
+  sessions: TeacherProjectSession[]
+}
+
 export interface CreateTeacherRequest {
   name: string
   email: string
@@ -372,6 +408,10 @@ export const apiSlice = createApi({
       query: (teacherId) => `/admin/teachers/${teacherId}/analytics`,
       providesTags: ['Teacher'],
     }),
+    getTeacherProjectPage: builder.query<TeacherProjectPageResponse, number>({
+      query: (teacherId) => `/admin/teachers/${teacherId}/project`,
+      providesTags: ['Teacher', 'Course', 'Session'],
+    }),
   }),
 })
 
@@ -399,4 +439,5 @@ export const {
   useUpdateTeacherMutation,
   useAdminResetUserPasswordMutation,
   useGetTeacherAnalyticsQuery,
+  useGetTeacherProjectPageQuery,
 } = apiSlice

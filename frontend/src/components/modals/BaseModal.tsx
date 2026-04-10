@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 interface BaseModalProps {
   isOpen: boolean
@@ -11,6 +12,7 @@ interface BaseModalProps {
 
 export function BaseModal({ isOpen, title, onClose, children, size = 'md' }: BaseModalProps) {
   if (!isOpen) return null
+  if (typeof document === 'undefined') return null
 
   const sizeClasses = {
     sm: 'max-w-sm',
@@ -18,7 +20,7 @@ export function BaseModal({ isOpen, title, onClose, children, size = 'md' }: Bas
     lg: 'max-w-lg',
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className={`w-full ${sizeClasses[size]} rounded-lg border border-slate-200 bg-white p-6 shadow-xl animate-in fade-in zoom-in-95`}>
         <div className="mb-4 flex items-center justify-between">
@@ -33,6 +35,7 @@ export function BaseModal({ isOpen, title, onClose, children, size = 'md' }: Bas
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

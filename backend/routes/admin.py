@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..deps import get_admin_user
 from ..models import ClassSession, Course, User, UserRole
-from ..schemas import CourseOut, CreateTeacherRequest, CreateTeacherResponse, ResetPasswordRequest, TeacherAnalyticsResponse, TeacherCourseAnalytics, TeacherListItem, UpdateTeacherRequest, UserOut
+from ..schemas import CourseOut, CreateTeacherRequest, CreateTeacherResponse, ResetPasswordRequest, TeacherAnalyticsResponse, TeacherCourseAnalytics, TeacherCourseDetailAnalytics, TeacherListItem, TeacherProjectPageResponse, TeacherSessionAnalytics, UpdateTeacherRequest, UserOut
 from ..security import hash_password
 
 
@@ -130,6 +130,74 @@ def get_teacher_analytics(teacher_id: int, admin_user: User = Depends(get_admin_
         total_sessions=total_sessions,
         overall_avg_final_score=overall_avg,
         courses=course_analytics,
+    )
+
+
+@router.get("/teachers/{teacher_id}/project", response_model=TeacherProjectPageResponse)
+def get_teacher_project_page(teacher_id: int, admin_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    _ = admin_user
+    teacher = db.query(User).filter(User.id == teacher_id, User.role == UserRole.TEACHER).first()
+    if teacher is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teacher not found")
+
+    courses = db.query(Course).filter(Course.instructor_id == teacher.id).order_by(Course.semester.asc(), Course.course_name.asc()).all()
+
+    course_details: list[TeacherCourseDetailAnalytics] = []
+    session_rows: list[TeacherSessionAnalytics] = []
+    overall_scores: list[float] = []
+
+    for course in courses:
+        sessions = (
+            db.query(ClassSession)
+            .filter(ClassSession.course_id == course.id)
+            .order_by(ClassSession.start_time.desc())
+            .all()
+        )
+        scores = [float(s.final_avg_score) for s in sessions if s.final_avg_score is not None]
+        overall_scores.extend(scores)
+
+        course_details.append(
+            TeacherCourseDetailAnalytics(
+                course_id=course.id,
+                course_name=course.course_name,
+                course_code=course.course_code,
+                semester=course.semester,
+                section=course.section,
+                sessions_count=len(sessions),
+                completed_sessions_count=len(scores),
+                avg_final_score=float(sum(scores) / len(scores)) if scores else None,
+                peak_final_score=max(scores) if scores else None,
+                lowest_final_score=min(scores) if scores else None,
+            )
+        )
+
+        for session in sessions:
+            session_rows.append(
+                TeacherSessionAnalytics(
+                    session_id=session.id,
+                    course_id=course.id,
+                    course_name=course.course_name,
+                    start_time=session.start_time,
+                    end_time=session.end_time,
+                    status=session.status.value,
+                    final_avg_score=float(session.final_avg_score) if session.final_avg_score is not None else None,
+                )
+            )
+
+    session_rows.sort(key=lambda row: row.start_time, reverse=True)
+    completed_sessions_count = len([score for score in overall_scores])
+
+    return TeacherProjectPageResponse(
+        teacher_id=teacher.id,
+        teacher_name=teacher.name,
+        teacher_email=teacher.email,
+        is_active=teacher.is_active,
+        total_courses=len(courses),
+        total_sessions=len(session_rows),
+        completed_sessions_count=completed_sessions_count,
+        overall_avg_final_score=float(sum(overall_scores) / len(overall_scores)) if overall_scores else None,
+        courses=course_details,
+        sessions=session_rows,
     )
 
 

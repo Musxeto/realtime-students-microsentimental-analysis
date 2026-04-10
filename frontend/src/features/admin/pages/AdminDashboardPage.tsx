@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { AlertCircle, BarChart3, BookOpen, Plus, Settings, Users } from 'lucide-react'
+import { AlertCircle, BarChart3, BookOpen, KeyRound, LineChart, Pencil, Plus, Settings, Sparkles, Trash2, Users } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import {
   useAdminResetUserPasswordMutation,
   useCreateCourseMutation,
@@ -198,10 +199,13 @@ export function AdminDashboardPage() {
   const totalCoursesAssigned = teachers.reduce((sum, t) => sum + t.course_count, 0)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 rounded-2xl bg-gradient-to-br from-slate-50 via-white to-blue-50 p-4 md:p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Admin Dashboard</h1>
+          <h1 className="flex items-center gap-2 text-3xl font-bold text-slate-900">
+            <Sparkles className="h-7 w-7 text-blue-600" />
+            Admin Dashboard
+          </h1>
           <p className="mt-1 text-sm text-slate-500">Manage teachers, courses, and system settings</p>
         </div>
       </div>
@@ -214,14 +218,16 @@ export function AdminDashboardPage() {
       )}
 
  {/* TAB NAVIGATION */}
-      <div className="sticky bottom-0 mt-8 border-t border-slate-200 bg-white pt-4">
+      <div className="sticky bottom-0 z-10 mt-8 rounded-xl border border-slate-200 bg-white/90 p-2 shadow-sm backdrop-blur">
         <div className="flex gap-2 overflow-x-auto">
           {(['overview', 'teachers', 'courses', 'alerts', 'settings'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`flex items-center gap-2 whitespace-nowrap px-4 py-2 text-sm font-medium transition ${
-                activeTab === tab ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-600 hover:text-slate-900'
+                activeTab === tab
+                  ? 'rounded-lg bg-blue-600 text-white shadow'
+                  : 'rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
               {tab === 'overview' && <BarChart3 className="h-4 w-4" />}
@@ -240,7 +246,7 @@ export function AdminDashboardPage() {
         <div className="space-y-6">
           {/* Stats Grid */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-600">Total Teachers</p>
@@ -253,7 +259,7 @@ export function AdminDashboardPage() {
               </p>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-600">Total Courses</p>
@@ -264,7 +270,7 @@ export function AdminDashboardPage() {
               <p className="mt-4 text-xs text-slate-500">{totalCoursesAssigned} assignments</p>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-600">Total Sessions</p>
@@ -275,7 +281,7 @@ export function AdminDashboardPage() {
               <p className="mt-4 text-xs text-slate-500">Across all courses</p>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-600">Avg Engagement</p>
@@ -295,7 +301,7 @@ export function AdminDashboardPage() {
           </div>
 
           {/* Quick Actions */}
-          <div className="rounded-lg border border-slate-200 bg-white p-6">
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-900">Quick Actions</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <button
@@ -332,7 +338,7 @@ export function AdminDashboardPage() {
           </div>
 
           {/* Teacher List Preview */}
-          <div className="rounded-lg border border-slate-200 bg-white p-6">
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-900">Recent Teachers</h2>
             <div className="mt-4 space-y-2">
               {teachers.slice(0, 3).map((t) => (
@@ -366,7 +372,7 @@ export function AdminDashboardPage() {
       {/* TEACHERS TAB */}
       {activeTab === 'teachers' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-6">
+          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Teachers Management</h2>
               <p className="mt-1 text-sm text-slate-600">View and manage teacher accounts</p>
@@ -380,7 +386,7 @@ export function AdminDashboardPage() {
             </button>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50">
@@ -424,12 +430,24 @@ export function AdminDashboardPage() {
                           </button>
                         </td>
                         <td className="px-6 py-3 text-sm">
-                          <button
-                            onClick={() => openResetPasswordModal(t.id, t.name)}
-                            className="font-semibold text-blue-600 hover:underline"
-                          >
-                            Reset Password
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <Link
+                              to={`/admin/teachers/${t.id}`}
+                              className="rounded-lg border border-indigo-200 bg-indigo-50 p-2 text-indigo-700 transition hover:bg-indigo-100"
+                              title="Open Teacher Project Page"
+                              aria-label={`Open project page for ${t.name}`}
+                            >
+                              <LineChart className="h-4 w-4" />
+                            </Link>
+                            <button
+                              onClick={() => openResetPasswordModal(t.id, t.name)}
+                              className="rounded-lg border border-blue-200 bg-blue-50 p-2 text-blue-700 transition hover:bg-blue-100"
+                              title="Reset Password"
+                              aria-label={`Reset password for ${t.name}`}
+                            >
+                              <KeyRound className="h-4 w-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -444,7 +462,7 @@ export function AdminDashboardPage() {
       {/* COURSES TAB */}
       {activeTab === 'courses' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-6">
+          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Courses Management</h2>
               <p className="mt-1 text-sm text-slate-600">Create and manage courses</p>
@@ -458,7 +476,7 @@ export function AdminDashboardPage() {
             </button>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50">
@@ -486,19 +504,25 @@ export function AdminDashboardPage() {
                         <td className="px-6 py-3 text-slate-600">{c.semester}</td>
                         <td className="px-6 py-3 text-slate-600">{c.section}</td>
                         <td className="px-6 py-3 text-slate-600">{teachers.find((t) => t.id === c.instructor_id)?.name || 'Unassigned'}</td>
-                        <td className="px-6 py-3 text-sm space-x-2">
+                        <td className="px-6 py-3 text-sm">
+                          <div className="flex items-center gap-2">
                           <button
                             onClick={() => openEditCourseModal(c)}
-                            className="font-semibold text-blue-600 hover:underline"
+                            className="rounded-lg border border-blue-200 bg-blue-50 p-2 text-blue-700 transition hover:bg-blue-100"
+                            title="Edit Course"
+                            aria-label={`Edit ${c.course_name}`}
                           >
-                            Edit
+                            <Pencil className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleDeleteCourse(c.id)}
-                            className="font-semibold text-red-600 hover:underline"
+                            className="rounded-lg border border-red-200 bg-red-50 p-2 text-red-700 transition hover:bg-red-100"
+                            title="Delete Course"
+                            aria-label={`Delete ${c.course_name}`}
                           >
-                            Delete
+                            <Trash2 className="h-4 w-4" />
                           </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -512,7 +536,7 @@ export function AdminDashboardPage() {
 
       {/* ALERTS TAB */}
       {activeTab === 'alerts' && (
-        <div className="rounded-lg border border-slate-200 bg-white p-6">
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900">Alert Configuration</h2>
           <p className="mt-1 text-sm text-slate-600">Configure engagement alerts per course</p>
 
@@ -544,7 +568,7 @@ export function AdminDashboardPage() {
 
       {/* SETTINGS TAB */}
       {activeTab === 'settings' && (
-        <div className="rounded-lg border border-slate-200 bg-white p-6">
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900">System Settings</h2>
           <div className="mt-6 space-y-4 text-slate-600">
             <p className="text-sm">• Backend API: Configured and running</p>
