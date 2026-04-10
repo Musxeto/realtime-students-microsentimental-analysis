@@ -1,13 +1,25 @@
-import { BarChart3, BookOpenCheck, ShieldCheck, User, Video } from 'lucide-react'
+import { BarChart3, BookOpenCheck, ClipboardList, LineChart, ShieldCheck, User, Video } from 'lucide-react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import { logout } from '../../features/auth/authSlice'
 import { useLogoutApiMutation } from '../../services/api/apiSlice'
 
-const navItems = [
-  { to: '/admin', label: 'Admin', icon: ShieldCheck },
-  { to: '/dashboard', label: 'Teacher', icon: BookOpenCheck },
-  { to: '/session/start', label: 'Start Session', icon: Video },
+type AppRole = 'admin' | 'teacher'
+
+interface NavItem {
+  to: string
+  label: string
+  icon: typeof ShieldCheck
+  roles: AppRole[]
+}
+
+const navItems: NavItem[] = [
+  { to: '/admin', label: 'Admin', icon: ShieldCheck, roles: ['admin'] },
+  { to: '/dashboard', label: 'Teacher Home', icon: BookOpenCheck, roles: ['teacher', 'admin'] },
+  { to: '/teacher/courses', label: 'My Courses', icon: BookOpenCheck, roles: ['teacher', 'admin'] },
+  { to: '/teacher/sessions', label: 'My Sessions', icon: ClipboardList, roles: ['teacher', 'admin'] },
+  { to: '/teacher/analytics', label: 'My Analytics', icon: LineChart, roles: ['teacher', 'admin'] },
+  { to: '/session/start', label: 'Start Session', icon: Video, roles: ['teacher', 'admin'] },
 ]
 
 export function AppLayout() {
@@ -16,7 +28,7 @@ export function AppLayout() {
   const [logoutApi] = useLogoutApiMutation()
   const role = useAppSelector((state) => state.auth.role)
   const refreshToken = useAppSelector((state) => state.auth.refreshToken)
-  const visibleItems = navItems.filter((item) => item.to !== '/admin' || role === 'admin')
+  const visibleItems = navItems.filter((item) => !!role && item.roles.includes(role))
 
   async function onLogout() {
     try {

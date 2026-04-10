@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AlertCircle, BarChart3, BookOpen, ChevronLeft, ChevronRight, Filter, KeyRound, LineChart, Pencil, Plus, Search, Settings, Sparkles, Trash2, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Link } from 'react-router-dom'
+import { useConfirm } from '../../../app/confirm'
 import {
   useAdminResetUserPasswordMutation,
   useCreateCourseMutation,
@@ -22,6 +23,7 @@ import { UpdateAlertConfigModal } from '../../../components/modals/UpdateAlertCo
 type Tab = 'overview' | 'teachers' | 'courses' | 'alerts' | 'settings'
 
 export function AdminDashboardPage() {
+  const confirm = useConfirm()
   const [createTeacher, { isLoading: creatingTeacher }] = useCreateTeacherMutation()
   const [updateTeacher] = useUpdateTeacherMutation()
   const [adminResetUserPassword, { isLoading: resettingPassword }] = useAdminResetUserPasswordMutation()
@@ -189,7 +191,14 @@ export function AdminDashboardPage() {
   }
 
   const handleDeleteCourse = async (id: number) => {
-    if (!window.confirm('Delete this course?')) return
+    const approved = await confirm({
+      title: 'Delete course',
+      message: 'Are you sure you want to delete this course?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      destructive: true,
+    })
+    if (!approved) return
     try {
       await deleteCourse(id).unwrap()
       await refetchCourses()

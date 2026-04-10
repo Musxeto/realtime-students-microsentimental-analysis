@@ -10,6 +10,9 @@ const UserProfilePage = lazy(() => import('../features/auth/pages/UserProfilePag
 const AdminDashboardPage = lazy(() => import('../features/admin/pages/AdminDashboardPage').then((module) => ({ default: module.AdminDashboardPage })))
 const TeacherProjectPage = lazy(() => import('../features/admin/pages/TeacherProjectPage').then((module) => ({ default: module.TeacherProjectPage })))
 const TeacherDashboardPage = lazy(() => import('../features/teacher/pages/TeacherDashboardPage').then((module) => ({ default: module.TeacherDashboardPage })))
+const TeacherCoursesPage = lazy(() => import('../features/teacher/pages/TeacherCoursesPage').then((module) => ({ default: module.TeacherCoursesPage })))
+const TeacherSessionsPage = lazy(() => import('../features/teacher/pages/TeacherSessionsPage').then((module) => ({ default: module.TeacherSessionsPage })))
+const TeacherAnalyticsPage = lazy(() => import('../features/teacher/pages/TeacherAnalyticsPage').then((module) => ({ default: module.TeacherAnalyticsPage })))
 const SessionStartPage = lazy(() => import('../features/live-session/pages/SessionStartPage').then((module) => ({ default: module.SessionStartPage })))
 const LiveSessionPage = lazy(() => import('../features/live-session/pages/LiveSessionPage').then((module) => ({ default: module.LiveSessionPage })))
 const SessionSummaryPage = lazy(() => import('../features/live-session/pages/SessionSummaryPage').then((module) => ({ default: module.SessionSummaryPage })))
@@ -79,6 +82,30 @@ export const router = createBrowserRouter([
         element: withSuspense(
           <ProtectedRoute allow={['teacher', 'admin']}>
             <TeacherDashboardPage />
+          </ProtectedRoute>,
+        ),
+      },
+      {
+        path: 'teacher/courses',
+        element: withSuspense(
+          <ProtectedRoute allow={['teacher', 'admin']}>
+            <TeacherCoursesPage />
+          </ProtectedRoute>,
+        ),
+      },
+      {
+        path: 'teacher/sessions',
+        element: withSuspense(
+          <ProtectedRoute allow={['teacher', 'admin']}>
+            <TeacherSessionsPage />
+          </ProtectedRoute>,
+        ),
+      },
+      {
+        path: 'teacher/analytics',
+        element: withSuspense(
+          <ProtectedRoute allow={['teacher', 'admin']}>
+            <TeacherAnalyticsPage />
           </ProtectedRoute>,
         ),
       },
