@@ -407,6 +407,10 @@ class ClassroomAnalyzer:
             else:
                 label, confidence = self._classify_crop(person_crop)
 
+            # UX hack: treat unknown students as look_forward instead of surfacing unknown.
+            if label == "unknown":
+                label = "look_forward"
+
             detections.append(
                 {
                     "person_index": idx,
