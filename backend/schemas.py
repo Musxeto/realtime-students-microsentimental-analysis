@@ -118,7 +118,7 @@ class UpdateTeacherRequest(BaseModel):
 class StartSessionRequest(BaseModel):
     course_id: int
     video_path: str
-    frame_step: int = 5
+    frame_step: int = 1
 
 
 class StartSessionResponse(BaseModel):

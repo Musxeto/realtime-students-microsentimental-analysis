@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 import asyncio
+from time import monotonic
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
@@ -18,6 +19,7 @@ from ..models import AlertConfig, AlertEvent, ClassSession, Course, PerformanceM
 from ..schemas import EndSessionResponse, SessionListResponse, SessionLogsResponse, SessionLogOut, SessionMetricsResponse, SessionOut, StartSessionRequest, StartSessionResponse
 from ..services.database import session_repository
 from ..services.inference_service import inference_service
+from ..services.opencv_preview import OpenCVSessionPreview
 from ..services.session_manager import session_manager
 
 
@@ -243,19 +245,35 @@ async def stream_session(websocket: WebSocket, session_id: int):
                 enabled=alert_config["enabled"],
             )
 
+    flush_interval = max(0.1, float(settings.session_log_flush_interval_seconds))
+    last_log_flush_at = monotonic()
+    last_metric_flush_at = monotonic()
+    preview = OpenCVSessionPreview(
+        session_id=session_id,
+        enabled=settings.session_opencv_preview_enabled,
+        window_name_prefix=settings.session_opencv_preview_window_name,
+    )
+
     try:
         async for payload in inference_service.stream_video(state.video_path, frame_step=state.frame_step):
             alert_state = session_manager.consume_frame_payload(session_id, payload)
+            now = monotonic()
+            flush_logs_due = (now - last_log_flush_at) >= flush_interval
+            flush_metrics_due = (now - last_metric_flush_at) >= flush_interval
 
             state = session_manager.get(session_id)
-            if state and len(state.log_buffer) >= settings.session_log_batch_size:
+            if state and (flush_logs_due or len(state.log_buffer) >= settings.session_log_batch_size):
                 batch = session_manager.drain_log_buffer(session_id)
-                session_repository.add_session_logs(session_id, batch)
+                if batch:
+                    session_repository.add_session_logs(session_id, batch)
+                last_log_flush_at = now
 
             state = session_manager.get(session_id)
-            if state and len(state.performance_buffer) >= settings.session_log_batch_size:
+            if state and (flush_metrics_due or len(state.performance_buffer) >= settings.session_log_batch_size):
                 metrics_batch = session_manager.drain_performance_buffer(session_id)
-                session_repository.add_performance_metrics(session_id, metrics_batch)
+                if metrics_batch:
+                    session_repository.add_performance_metrics(session_id, metrics_batch)
+                last_metric_flush_at = now
 
             if state and alert_state and alert_state.get("active") and state.alert_event_open:
                 session_repository.add_alert_event(
@@ -265,7 +283,21 @@ async def stream_session(websocket: WebSocket, session_id: int):
                 )
                 state.alert_event_open = False
 
-            await websocket.send_json({"session_id": session_id, "alert_state": alert_state, **payload})
+            outgoing = {"session_id": session_id, "alert_state": alert_state, **payload}
+            await websocket.send_json(outgoing)
+            preview.show_payload(outgoing)
+
+        state = session_manager.get(session_id)
+        if state is not None:
+            final = state.last_payload or {}
+            await websocket.send_json(
+                {
+                    "session_id": session_id,
+                    "stream_completed": True,
+                    "message": "Video stream completed",
+                    **final,
+                }
+            )
     except WebSocketDisconnect:
         session_manager.mark_paused(session_id)
         with SessionLocal() as db:
@@ -277,6 +309,7 @@ async def stream_session(websocket: WebSocket, session_id: int):
         timeout_task = asyncio.create_task(_auto_complete_if_disconnected(session_id))
         session_manager.attach_timeout_task(session_id, timeout_task)
     finally:
+        preview.close()
         if websocket.client_state.name != "DISCONNECTED":
             await websocket.close()
 

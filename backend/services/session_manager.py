@@ -11,7 +11,7 @@ class LiveSessionState:
     session_id: int
     course_id: int
     video_path: Path
-    frame_step: int = 5
+    frame_step: int = 1
     created_at: datetime = field(default_factory=datetime.utcnow)
     last_payload: dict | None = None
     active: bool = True
@@ -37,7 +37,7 @@ class SessionManager:
     def __init__(self):
         self._sessions: dict[int, LiveSessionState] = {}
 
-    def create(self, session_id: int, course_id: int, video_path: Path, frame_step: int = 5) -> LiveSessionState:
+    def create(self, session_id: int, course_id: int, video_path: Path, frame_step: int = 1) -> LiveSessionState:
         state = LiveSessionState(session_id=session_id, course_id=course_id, video_path=video_path, frame_step=frame_step)
         self._sessions[session_id] = state
         return state

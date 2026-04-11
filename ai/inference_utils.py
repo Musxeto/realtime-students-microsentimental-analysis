@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import base64
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -253,6 +254,72 @@ def _predict_behavior(model: YOLO, source, behavior_conf: float, behavior_imgsz:
         raise
 
 
+def _predict_person(model: YOLO, source, person_conf: float, person_imgsz: int, max_det: int):
+    runtime_imgsz = person_imgsz
+
+    try:
+        return model.predict(
+            source,
+            classes=[0],
+            conf=person_conf,
+            iou=0.3,
+            imgsz=runtime_imgsz,
+            max_det=max_det,
+            verbose=False,
+        )
+    except Exception as exc:
+        msg = str(exc)
+
+        if "INVALID_ARGUMENT" in msg and "Expected:" in msg:
+            match = re.search(r"index:\s*[23]\s*Got:\s*\d+\s*Expected:\s*(\d+)", msg)
+            if match:
+                runtime_imgsz = int(match.group(1))
+            return model.predict(
+                source,
+                classes=[0],
+                conf=person_conf,
+                iou=0.3,
+                imgsz=runtime_imgsz,
+                max_det=max_det,
+                verbose=False,
+            )
+
+        if "INVALID_ARGUMENT" in msg:
+            return model.predict(
+                source,
+                classes=[0],
+                conf=person_conf,
+                iou=0.3,
+                max_det=max_det,
+                verbose=False,
+            )
+        raise
+
+
+def encode_frame_preview(frame: np.ndarray, max_width: int = 640, quality: int = 60) -> str | None:
+    if frame is None or frame.size == 0:
+        return None
+
+    h, w = frame.shape[:2]
+    if w <= 0 or h <= 0:
+        return None
+
+    out = frame
+    if w > max_width:
+        scale = max_width / float(w)
+        out = cv2.resize(frame, (max_width, max(1, int(h * scale))), interpolation=cv2.INTER_AREA)
+
+    ok, encoded = cv2.imencode(
+        ".jpg",
+        out,
+        [int(cv2.IMWRITE_JPEG_QUALITY), int(max(40, min(95, quality)))],
+    )
+    if not ok:
+        return None
+
+    return base64.b64encode(encoded.tobytes()).decode("ascii")
+
+
 @dataclass
 class FrameAnalysis:
     frame_index: int
@@ -273,7 +340,7 @@ class ClassroomAnalyzer:
         behavior_model_path: Path | None = None,
         person_conf: float = 0.3,
         behavior_conf: float = 0.1,
-        person_imgsz: int = 960,
+        person_imgsz: int = 640,
         behavior_imgsz: int = 416,
         max_det: int = 500,
         crop_padding: int = 20,
@@ -291,15 +358,7 @@ class ClassroomAnalyzer:
         self.behavior_classifier = YOLO(str(self.behavior_model_path))
 
     def _stage1(self, frame: np.ndarray):
-        results = self.person_finder.predict(
-            frame,
-            classes=[0],
-            conf=self.person_conf,
-            iou=0.3,
-            imgsz=self.person_imgsz,
-            max_det=self.max_det,
-            verbose=False,
-        )
+        results = _predict_person(self.person_finder, frame, self.person_conf, self.person_imgsz, self.max_det)
 
         raw_boxes: list[list[int]] = []
         if results and results[0].boxes is not None and len(results[0].boxes) > 0:
@@ -371,6 +430,8 @@ class ClassroomAnalyzer:
         return {
             "frame_index": frame_index,
             "timestamp_sec": round(timestamp_sec, 3) if timestamp_sec is not None else None,
+            "frame_width": w,
+            "frame_height": h,
             "raw_stage1_boxes": raw_count,
             "behavior_boxes": len(detections),
             "classifications": detections,

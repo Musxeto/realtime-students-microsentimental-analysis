@@ -76,6 +76,11 @@ Required or recommended variables:
   - Default: 60
 - SESSION_DISCONNECT_TIMEOUT_SECONDS
   - Default: 30
+- SESSION_OPENCV_PREVIEW_ENABLED
+  - Default: false
+  - Set true to open a local OpenCV mirror window while websocket session stream is running.
+- SESSION_OPENCV_PREVIEW_WINDOW_NAME
+  - Default: Session Live Preview
 
 Frontend variables:
 
@@ -244,6 +249,16 @@ AI video smoke test:
 cd "d:\FYP\FYP CODE"
 python ai/tests/test_video.py
 ```
+
+OpenCV mirror preview during real session stream (backend + frontend at same time):
+
+```powershell
+cd "d:\FYP\FYP CODE"
+$env:SESSION_OPENCV_PREVIEW_ENABLED="true"
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Then start a session from the frontend. A separate OpenCV window will open on the backend machine and show the same live session frames with overlays.
 
 Frontend type and build check:
 

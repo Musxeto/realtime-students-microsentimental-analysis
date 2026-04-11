@@ -16,7 +16,19 @@ export function LiveSessionPage() {
   const currentEngagement = lastJsonMessage?.engagement_score ?? 0
   const engagedCount = lastJsonMessage?.engaged_count ?? 0
   const distractedCount = lastJsonMessage?.distracted_count ?? 0
+  const liveLatency = lastJsonMessage?.processing_latency_ms
+  const runtimeSec = lastJsonMessage?.runtime_sec
+  const processedFrames = lastJsonMessage?.processed_frames
+  const liveFps = lastJsonMessage?.live_fps
+  const sourceFps = lastJsonMessage?.source_fps
+  const streamCompleted = Boolean(lastJsonMessage?.stream_completed)
   const alertState = lastJsonMessage?.alert_state
+  const frameSrc = lastJsonMessage?.frame_jpeg_base64
+    ? `data:image/jpeg;base64,${lastJsonMessage.frame_jpeg_base64}`
+    : null
+  const frameW = lastJsonMessage?.frame_width ?? 1
+  const frameH = lastJsonMessage?.frame_height ?? 1
+  const overlayDetections = lastJsonMessage?.classifications ?? []
   const [alertHistory, setAlertHistory] = useState<Array<{ id: number; msg: string; time: string }>>([])
 
   useEffect(() => {
@@ -80,26 +92,99 @@ export function LiveSessionPage() {
     }
   }
 
-  const connectionLabel = readyState === 1 ? 'Live' : readyState === 0 ? 'Connecting' : 'Reconnecting'
+  const connectionLabel = streamCompleted
+    ? 'Completed'
+    : readyState === 1
+      ? 'Live'
+      : readyState === 0
+        ? 'Connecting'
+        : 'Reconnecting'
 
   return (
     <section className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-      <div className="rounded-xl border bg-white p-4 shadow-card">
-        <div className="mb-3 flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-slate-900">Session {id}</h1>
-          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-            {connectionLabel}
-          </span>
+      <div className="rounded-xl border bg-white p-3 shadow-card">
+        <div className="relative aspect-video overflow-hidden rounded-lg bg-slate-950">
+          {frameSrc ? (
+            <img src={frameSrc} alt="Live session frame" className="h-full w-full object-contain" />
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-slate-300">
+              Waiting for video frames...
+            </div>
+          )}
+
+          {frameSrc
+            ? overlayDetections.map((det, idx) => {
+                const box = det.box
+                if (!box || box.length !== 4 || frameW <= 0 || frameH <= 0) {
+                  return null
+                }
+                const [x1, y1, x2, y2] = box
+                const left = `${Math.max(0, (x1 / frameW) * 100)}%`
+                const top = `${Math.max(0, (y1 / frameH) * 100)}%`
+                const width = `${Math.max(0, ((x2 - x1) / frameW) * 100)}%`
+                const height = `${Math.max(0, ((y2 - y1) / frameH) * 100)}%`
+                const label = det.label ?? 'unknown'
+                const confidence = typeof det.confidence === 'number' ? ` ${Math.round(det.confidence * 100)}%` : ''
+                const distracted = label === 'sleep' || label === 'using_device' || label === 'turn_head'
+
+                return (
+                  <div
+                    key={`${idx}-${x1}-${y1}-${x2}-${y2}`}
+                    className={`absolute border-2 ${distracted ? 'border-rose-400' : 'border-emerald-400'}`}
+                    style={{ left, top, width, height }}
+                  >
+                    <span
+                      className={`absolute -top-6 left-0 rounded px-1.5 py-0.5 text-[10px] font-semibold text-white ${
+                        distracted ? 'bg-rose-500' : 'bg-emerald-500'
+                      }`}
+                    >
+                      {label}
+                      {confidence}
+                    </span>
+                  </div>
+                )
+              })
+            : null}
+
+          <div className="absolute left-3 top-3 rounded-lg bg-black/60 px-3 py-2 text-xs text-white backdrop-blur">
+            <p className="font-semibold">Session {id} • {connectionLabel}</p>
+            <p>Time {typeof runtimeSec === 'number' ? `${runtimeSec}s` : '-'}</p>
+            <p>Frame #{lastJsonMessage?.frame_index ?? '-'}</p>
+          </div>
+
+          <div className="absolute right-3 top-3 rounded-lg bg-black/60 px-3 py-2 text-right text-xs text-white backdrop-blur">
+            <p className="text-[10px] uppercase tracking-wide text-slate-300">Engagement</p>
+            <p className="text-2xl font-bold leading-none">{Math.round(currentEngagement)}%</p>
+            <p>Engaged {engagedCount} • Distracted {distractedCount}</p>
+          </div>
+
+          <div className="absolute bottom-3 left-3 rounded-lg bg-black/60 px-3 py-2 text-xs text-white backdrop-blur">
+            <p>Latency {typeof liveLatency === 'number' ? `${liveLatency} ms` : '-'}</p>
+            <p>Live FPS {liveFps ?? '-'} • Source FPS {sourceFps ?? '-'}</p>
+            <p>Processed frames {processedFrames ?? '-'}</p>
+          </div>
+
+          {alertState?.active ? (
+            <div className="absolute bottom-3 right-3 max-w-[60%] rounded-lg border border-rose-400 bg-rose-950/85 px-3 py-2 text-xs font-semibold text-rose-100">
+              ALERT: {alertState.reason || 'Low engagement detected'}
+            </div>
+          ) : null}
         </div>
-        <div className="aspect-video rounded-lg bg-slate-900/90" />
-        <button
-          type="button"
-          onClick={handleEndSession}
-          disabled={isEnding}
-          className="mt-4 inline-flex rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:opacity-60"
-        >
-          {isEnding ? 'Ending...' : 'End Session'}
-        </button>
+
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-slate-500">
+            {frameSrc ? 'Live frame stream active' : 'No frame payload yet'}
+            {lastJsonMessage ? ` • payload keys received` : ''}
+          </p>
+          <button
+            type="button"
+            onClick={handleEndSession}
+            disabled={isEnding}
+            className="inline-flex rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:opacity-60"
+          >
+            {isEnding ? 'Ending...' : 'End Session'}
+          </button>
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -119,6 +204,26 @@ export function LiveSessionPage() {
           <Title>Runtime Metrics</Title>
           <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-600">
             <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Live latency</p>
+              <p className="text-base font-semibold text-slate-900">
+                {typeof liveLatency === 'number' ? `${liveLatency} ms` : '-'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Live FPS</p>
+              <p className="text-base font-semibold text-slate-900">{liveFps ?? '-'}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Runtime</p>
+              <p className="text-base font-semibold text-slate-900">
+                {typeof runtimeSec === 'number' ? `${runtimeSec}s` : '-'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Processed frames</p>
+              <p className="text-base font-semibold text-slate-900">{processedFrames ?? '-'}</p>
+            </div>
+            <div>
               <p className="text-xs uppercase tracking-wide text-slate-400">Avg latency</p>
               <p className="text-base font-semibold text-slate-900">{metrics?.avg_latency_ms ?? '-'} ms</p>
             </div>
@@ -131,8 +236,8 @@ export function LiveSessionPage() {
               <p className="text-base font-semibold text-slate-900">{metrics?.actual_fps ?? '-'}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Alerts</p>
-              <p className="text-base font-semibold text-slate-900">{metrics?.alert_count ?? 0}</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Source FPS / Alerts</p>
+              <p className="text-base font-semibold text-slate-900">{sourceFps ?? '-'} / {metrics?.alert_count ?? 0}</p>
             </div>
           </div>
         </Card>
