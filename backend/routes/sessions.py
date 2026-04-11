@@ -303,6 +303,12 @@ async def stream_session(websocket: WebSocket, session_id: int):
     with SessionLocal() as db:
         course = db.query(Course).filter(Course.id == state.course_id).first()
         if course is not None:
+            state.course_code_str = course.course_code
+            if course.instructor:
+                state.teacher_name_str = course.instructor.name
+            else:
+                state.teacher_name_str = "Teacher"
+                
             alert_config = _load_alert_config(db, course.id)
             session_manager.set_alert_config(
                 session_id,
@@ -350,6 +356,40 @@ async def stream_session(websocket: WebSocket, session_id: int):
                 )
                 state.alert_event_open = False
 
+            # --- Gemini AI Periodic Insight ---
+            if state:
+                current_time = monotonic()
+                # Trigger an AI suggestion every 5 seconds to avoid spamming the API and let it read the state
+                if current_time - getattr(state, 'last_ai_call_at', 0.0) >= 5.0:
+                    state.last_ai_call_at = current_time
+                    
+                    async def fetch_insight(curr_state, payload_snapshot):
+                        try:
+                            from ..services.gemini_service import gemini_service
+                            insight = await gemini_service.generate_pedagogical_insight(
+                                engagement_score=float(payload_snapshot.get("engagement_score", 0.0)),
+                                distracted_count=int(payload_snapshot.get("distracted_count", 0)),
+                                student_count=int(payload_snapshot.get("student_count", 0)),
+                                alert_active=bool(curr_state.alert_active),
+                                course_code=curr_state.course_code_str or "Class",
+                                teacher_name=curr_state.teacher_name_str or "Teacher"
+                            )
+                            if insight:
+                                curr_state.ai_insight = insight
+                        except Exception as e:
+                            import logging
+                            logging.getLogger(__name__).error(f"Error fetching AI insight: {e}")
+                            
+                    asyncio.create_task(fetch_insight(state, dict(payload)))
+                    
+                if state.ai_insight:
+                    # Dynamically inject the Gemini insight into the stream
+                    if alert_state and alert_state.get("active"):
+                        alert_state["reason"] = f"AI Alert: {state.ai_insight}"
+                    else:
+                        payload["message"] = f"AI Coach: {state.ai_insight}"
+            # ----------------------------------
+
             outgoing = {"session_id": session_id, "alert_state": alert_state, **payload}
             await websocket.send_json(outgoing)
             preview.show_payload(outgoing)
@@ -371,13 +411,18 @@ async def stream_session(websocket: WebSocket, session_id: int):
     except (WebSocketDisconnect, RuntimeError):
         if stream_exhausted:
             return
-        session_manager.mark_paused(session_id)
+
+        # If session already ended (manual end or auto-complete), do not downgrade to PAUSED.
         with SessionLocal() as db:
             db_session = db.query(ClassSession).filter(ClassSession.id == session_id).first()
-            if db_session is not None:
-                db_session.status = SessionStatus.PAUSED
-                db.commit()
+            if db_session is None:
+                return
+            if db_session.status == SessionStatus.COMPLETED:
+                return
+            db_session.status = SessionStatus.PAUSED
+            db.commit()
 
+        session_manager.mark_paused(session_id)
         timeout_task = asyncio.create_task(_auto_complete_if_disconnected(session_id))
         session_manager.attach_timeout_task(session_id, timeout_task)
     finally:
