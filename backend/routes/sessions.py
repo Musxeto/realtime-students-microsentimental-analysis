@@ -56,6 +56,69 @@ def _load_alert_config(db: Session, course_id: int) -> dict:
     }
 
 
+def _complete_session_now(session_id: int, *, auto_flag: str | None = None) -> None:
+    pending_logs = session_manager.drain_log_buffer(session_id)
+    if pending_logs:
+        session_repository.add_session_logs(session_id, pending_logs)
+    pending_metrics = session_manager.drain_performance_buffer(session_id)
+    if pending_metrics:
+        session_repository.add_performance_metrics(session_id, pending_metrics)
+
+    summary = session_manager.final_summary(session_id)
+    final_avg_score = float(summary.get("avg_engagement_score", 0.0))
+
+    with SessionLocal() as db:
+        db_session = db.query(ClassSession).filter(ClassSession.id == session_id).first()
+        if db_session is None:
+            return
+        db_session.status = SessionStatus.COMPLETED
+        db_session.end_time = datetime.utcnow()
+        db_session.final_avg_score = final_avg_score
+        metadata = db_session.session_metadata or {}
+        metadata["final_summary"] = summary
+        if auto_flag:
+            metadata[auto_flag] = True
+        db_session.session_metadata = metadata
+        db.commit()
+
+    session_repository.finalize_session(session_id, final_avg_score, summary)
+    session_manager.mark_finished(session_id)
+
+
+def _cleanup_stale_active_sessions(db: Session, *, course_id: int, instructor_id: int | None) -> None:
+    active_statuses = [SessionStatus.PENDING, SessionStatus.RUNNING, SessionStatus.PAUSED]
+
+    stale_course_sessions = (
+        db.query(ClassSession)
+        .filter(ClassSession.course_id == course_id, ClassSession.status.in_(active_statuses))
+        .all()
+    )
+    for stale in stale_course_sessions:
+        if session_manager.get(stale.id) is None:
+            stale.status = SessionStatus.COMPLETED
+            stale.end_time = stale.end_time or datetime.utcnow()
+            metadata = stale.session_metadata or {}
+            metadata["stale_active_auto_closed"] = True
+            stale.session_metadata = metadata
+
+    if instructor_id is not None:
+        stale_teacher_sessions = (
+            db.query(ClassSession)
+            .join(Course, Course.id == ClassSession.course_id)
+            .filter(Course.instructor_id == instructor_id, ClassSession.status.in_(active_statuses))
+            .all()
+        )
+        for stale in stale_teacher_sessions:
+            if session_manager.get(stale.id) is None:
+                stale.status = SessionStatus.COMPLETED
+                stale.end_time = stale.end_time or datetime.utcnow()
+                metadata = stale.session_metadata or {}
+                metadata["stale_active_auto_closed"] = True
+                stale.session_metadata = metadata
+
+    db.commit()
+
+
 async def _auto_complete_if_disconnected(session_id: int):
     await asyncio.sleep(settings.session_disconnect_timeout_seconds)
 
@@ -143,6 +206,9 @@ def start_session(payload: StartSessionRequest, current_user: User = Depends(get
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     if current_user.role != UserRole.ADMIN and course.instructor_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot start sessions for this course")
+
+    # Recover from stale sessions left active in DB after process restart/crash.
+    _cleanup_stale_active_sessions(db, course_id=payload.course_id, instructor_id=course.instructor_id)
 
     active_statuses = [SessionStatus.PENDING, SessionStatus.RUNNING, SessionStatus.PAUSED]
     duplicate_course = (
@@ -253,6 +319,7 @@ async def stream_session(websocket: WebSocket, session_id: int):
         enabled=settings.session_opencv_preview_enabled,
         window_name_prefix=settings.session_opencv_preview_window_name,
     )
+    stream_exhausted = False
 
     try:
         async for payload in inference_service.stream_video(state.video_path, frame_step=state.frame_step):
@@ -287,8 +354,11 @@ async def stream_session(websocket: WebSocket, session_id: int):
             await websocket.send_json(outgoing)
             preview.show_payload(outgoing)
 
+        stream_exhausted = True
+        _complete_session_now(session_id, auto_flag="auto_ended_on_stream_complete")
+
         state = session_manager.get(session_id)
-        if state is not None:
+        if state is not None and websocket.client_state.name == "CONNECTED":
             final = state.last_payload or {}
             await websocket.send_json(
                 {
@@ -298,7 +368,9 @@ async def stream_session(websocket: WebSocket, session_id: int):
                     **final,
                 }
             )
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, RuntimeError):
+        if stream_exhausted:
+            return
         session_manager.mark_paused(session_id)
         with SessionLocal() as db:
             db_session = db.query(ClassSession).filter(ClassSession.id == session_id).first()
@@ -311,7 +383,10 @@ async def stream_session(websocket: WebSocket, session_id: int):
     finally:
         preview.close()
         if websocket.client_state.name != "DISCONNECTED":
-            await websocket.close()
+            try:
+                await websocket.close()
+            except RuntimeError:
+                pass
 
 
 @router.get("/{session_id}/metrics", response_model=SessionMetricsResponse)
