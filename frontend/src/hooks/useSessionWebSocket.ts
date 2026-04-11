@@ -8,9 +8,11 @@ const useWebSocket =
   (useWebSocketImport as unknown as { default?: typeof useWebSocketImport }).default ?? useWebSocketImport
 
 export interface SessionPayload {
+  stream_schema_version?: number
   session_id?: number
   frame_index: number
   timestamp_sec: number
+  behavior_boxes?: number
   frame_width?: number
   frame_height?: number
   engagement_score: number
@@ -22,6 +24,7 @@ export interface SessionPayload {
   live_fps?: number
   source_fps?: number | null
   frame_step?: number
+  student_count?: number
   frame_jpeg_base64?: string
   stream_completed?: boolean
   classifications?: Array<{

@@ -39,7 +39,10 @@ class InferenceService:
                 if current_index % frame_step != 0:
                     continue
                 payload = analyzer.analyze_frame(frame, frame_index=current_index, fps=fps)
-                payload["frame_jpeg_base64"] = encode_frame_preview(frame)
+                try:
+                    payload["frame_jpeg_base64"] = encode_frame_preview(frame)
+                except Exception:
+                    payload["frame_jpeg_base64"] = None
                 return payload
 
         try:
@@ -58,6 +61,15 @@ class InferenceService:
                 payload["live_fps"] = round(emitted_frames / max(runtime_sec, 1e-6), 2)
                 payload["source_fps"] = round(float(fps), 2) if fps > 0 else None
                 payload["frame_step"] = frame_step
+                payload["stream_schema_version"] = 2
+                payload["student_count"] = int(
+                    payload.get("behavior_boxes")
+                    or len(payload.get("classifications") or [])
+                )
+                payload.setdefault("frame_jpeg_base64", None)
+                payload.setdefault("timestamp_sec", payload.get("runtime_sec", 0.0))
+                payload.setdefault("runtime_sec", payload.get("timestamp_sec", 0.0))
+                payload.setdefault("processed_frames", payload.get("frame_index", -1) + 1)
                 yield payload
                 await asyncio.sleep(0)
         finally:
