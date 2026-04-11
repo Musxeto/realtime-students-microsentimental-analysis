@@ -136,9 +136,10 @@ export function LiveSessionPage() {
   const PIE_COLORS = ['#10b981', '#f43f5e'] // Emerald for engaged, Rose for distracted
 
   return (
-    <section className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-      <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm backdrop-blur-md">
-        <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-950 shadow-inner">
+    <section className="grid gap-6 lg:grid-cols-[1.7fr_1fr] xl:grid-cols-[2fr_1fr]">
+      <div className="flex flex-col gap-6">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm backdrop-blur-md">
+          <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-950 shadow-inner">
           {frameSrc ? (
             <img src={frameSrc} alt="Live session frame" className="h-full w-full object-contain" />
           ) : (
@@ -246,7 +247,47 @@ export function LiveSessionPage() {
                  Ending...
                </>
              ) : 'End Session'}
-          </button>
+            </button>
+          </div>
+        </div>
+
+        <div className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition-colors duration-300 ${alertState?.active ? 'border-rose-300' : 'border-slate-200'}`}>
+          <div className={`border-b px-6 py-4 ${alertState?.active ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-100'}`}>
+            <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-800">
+              AI Co-Pilot Alert
+              {alertState?.active && (
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500"></span>
+                </span>
+              )}
+            </h3>
+          </div>
+          <div className="p-6">
+            <p className={`font-medium ${alertState?.active ? 'text-rose-600' : 'text-slate-600'}`}>
+              {alertState?.active
+                ? alertState.reason || 'Low engagement alert is active.'
+                : lastJsonMessage?.message
+                  ? lastJsonMessage.message
+                  : 'No intervention required yet. Alerts will appear on sustained low engagement.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Intervention History</h3>
+          <div className="mt-4 max-h-40 overflow-y-auto pr-2 space-y-3">
+            {alertHistory.length === 0 ? (
+              <p className="text-sm italic text-slate-400">No events logged yet.</p>
+            ) : (
+              alertHistory.map((h) => (
+                <div key={h.id} className="group flex flex-col rounded-xl border border-slate-100 bg-slate-50 p-3 transition-colors hover:bg-slate-100/50">
+                  <p className="text-sm font-bold text-slate-800">{h.msg}</p>
+                  <p className="mt-1 text-xs font-medium text-slate-400">{h.time}</p>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 
@@ -354,44 +395,6 @@ export function LiveSessionPage() {
           </div>
         </div>
 
-        <div className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition-colors duration-300 ${alertState?.active ? 'border-rose-300' : 'border-slate-200'}`}>
-          <div className={`border-b px-6 py-4 ${alertState?.active ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-100'}`}>
-            <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-800">
-              AI Co-Pilot Alert
-              {alertState?.active && (
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500"></span>
-                </span>
-              )}
-            </h3>
-          </div>
-          <div className="p-6">
-            <p className={`font-medium ${alertState?.active ? 'text-rose-600' : 'text-slate-600'}`}>
-              {alertState?.active
-                ? alertState.reason || 'Low engagement alert is active.'
-                : lastJsonMessage?.message
-                  ? lastJsonMessage.message
-                  : 'No intervention required yet. Alerts will appear on sustained low engagement.'}
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Intervention History</h3>
-          <div className="mt-4 max-h-40 overflow-y-auto pr-2 space-y-3">
-            {alertHistory.length === 0 ? (
-              <p className="text-sm italic text-slate-400">No events logged yet.</p>
-            ) : (
-              alertHistory.map((h) => (
-                <div key={h.id} className="group flex flex-col rounded-xl border border-slate-100 bg-slate-50 p-3 transition-colors hover:bg-slate-100/50">
-                  <p className="text-sm font-bold text-slate-800">{h.msg}</p>
-                  <p className="mt-1 text-xs font-medium text-slate-400">{h.time}</p>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
       </div>
     </section>
   )
