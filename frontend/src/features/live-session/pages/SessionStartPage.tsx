@@ -9,7 +9,7 @@ export function SessionStartPage() {
   const [startSession, { isLoading: isStarting }] = useStartSessionMutation()
   const [courseId, setCourseId] = useState<number | null>(null)
   const [videoPath, setVideoPath] = useState('')
-  const [frameStep, setFrameStep] = useState(5)
+  const [frameStep, setFrameStep] = useState(1)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {

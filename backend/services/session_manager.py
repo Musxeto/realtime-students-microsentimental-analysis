@@ -11,7 +11,7 @@ class LiveSessionState:
     session_id: int
     course_id: int
     video_path: Path
-    frame_step: int = 5
+    frame_step: int = 1
     created_at: datetime = field(default_factory=datetime.utcnow)
     last_payload: dict | None = None
     active: bool = True
@@ -31,13 +31,17 @@ class LiveSessionState:
     alert_event_open: bool = False
     disconnected_at: datetime | None = None
     timeout_task: asyncio.Task | None = None
+    ai_insight: str | None = None
+    last_ai_call_at: float = 0.0
+    course_code_str: str | None = None
+    teacher_name_str: str | None = None
 
 
 class SessionManager:
     def __init__(self):
         self._sessions: dict[int, LiveSessionState] = {}
 
-    def create(self, session_id: int, course_id: int, video_path: Path, frame_step: int = 5) -> LiveSessionState:
+    def create(self, session_id: int, course_id: int, video_path: Path, frame_step: int = 1) -> LiveSessionState:
         state = LiveSessionState(session_id=session_id, course_id=course_id, video_path=video_path, frame_step=frame_step)
         self._sessions[session_id] = state
         return state
@@ -148,11 +152,12 @@ class SessionManager:
     def alert_state(self, session_id: int) -> dict:
         state = self._sessions.get(session_id)
         if state is None:
-            return {"active": False, "reason": "", "triggered_at": None}
+            return {"active": False, "reason": "", "triggered_at": None, "ai_insight": None}
         return {
             "active": state.alert_active,
             "reason": state.alert_reason or "",
             "triggered_at": state.alert_triggered_at.isoformat() if state.alert_triggered_at else None,
+            "ai_insight": state.ai_insight,
         }
 
     def drain_performance_buffer(self, session_id: int) -> list[dict]:

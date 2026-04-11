@@ -8,13 +8,32 @@ const useWebSocket =
   (useWebSocketImport as unknown as { default?: typeof useWebSocketImport }).default ?? useWebSocketImport
 
 export interface SessionPayload {
+  stream_schema_version?: number
   session_id?: number
   frame_index: number
   timestamp_sec: number
+  behavior_boxes?: number
+  frame_width?: number
+  frame_height?: number
   engagement_score: number
   engaged_count: number
   distracted_count: number
-  classifications?: Array<Record<string, unknown>>
+  processing_latency_ms?: number
+  runtime_sec?: number
+  processed_frames?: number
+  live_fps?: number
+  source_fps?: number | null
+  frame_step?: number
+  student_count?: number
+  frame_jpeg_base64?: string
+  stream_completed?: boolean
+  classifications?: Array<{
+    person_index?: number
+    box?: [number, number, number, number]
+    label?: string
+    confidence?: number
+    status?: string
+  }>
   message?: string
   alert_state?: {
     active: boolean
@@ -37,7 +56,7 @@ export function useSessionWebSocket(sessionId: string | undefined) {
   }, [sessionId, token])
 
   const { lastJsonMessage, readyState } = useWebSocket<SessionPayload>(socketUrl, {
-    shouldReconnect: () => true,
+    shouldReconnect: (closeEvent) => closeEvent.code !== 1000,
     reconnectInterval: 3000,
     heartbeat: {
       message: 'ping',
