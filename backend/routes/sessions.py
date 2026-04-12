@@ -422,28 +422,28 @@ async def stream_session(websocket: WebSocket, session_id: int):
                         state.last_ai_alert_active = curr_alert
                         
                         async def fetch_insight(curr_state, engagement, payload_snapshot, alert_status):
-                        try:
-                            from ..services.gemini_service import gemini_service
-                            import logging
-                            srv_logger = logging.getLogger(__name__)
-                            srv_logger.info(f"Session {session_id}: Requesting Gemini pedagogical insight (Avg Engagement: {engagement:.1f})...")
-                            
-                            insight = await gemini_service.generate_pedagogical_insight(
-                                engagement_score=engagement,
-                                distracted_count=int(payload_snapshot.get("distracted_count", 0)),
-                                student_count=int(payload_snapshot.get("student_count", 0)),
-                                alert_active=alert_status,
-                                course_code=curr_state.course_code_str or "Class",
-                                teacher_name=curr_state.teacher_name_str or "Teacher"
-                            )
-                            if insight:
-                                curr_state.ai_insight = insight
-                                srv_logger.info(f"Session {session_id}: AI Insight received: {insight}")
-                            else:
-                                srv_logger.warning(f"Session {session_id}: Gemini returned empty insight.")
-                        except Exception as e:
-                            import logging
-                            logging.getLogger(__name__).error(f"Error fetching AI insight: {e}")
+                            try:
+                                from ..services.gemini_service import gemini_service
+                                import logging
+                                srv_logger = logging.getLogger(__name__)
+                                srv_logger.info(f"Session {session_id}: Requesting Gemini pedagogical insight (Avg Engagement: {engagement:.1f})...")
+                                
+                                insight = await gemini_service.generate_pedagogical_insight(
+                                    engagement_score=engagement,
+                                    distracted_count=int(payload_snapshot.get("distracted_count", 0)),
+                                    student_count=int(payload_snapshot.get("student_count", 0)),
+                                    alert_active=alert_status,
+                                    course_code=curr_state.course_code_str or "Class",
+                                    teacher_name=curr_state.teacher_name_str or "Teacher"
+                                )
+                                if insight:
+                                    curr_state.ai_insight = insight
+                                    srv_logger.info(f"Session {session_id}: AI Insight received: {insight}")
+                                else:
+                                    srv_logger.warning(f"Session {session_id}: Gemini returned empty insight.")
+                            except Exception as e:
+                                import logging
+                                logging.getLogger(__name__).error(f"Error fetching AI insight: {e}")
                             
                     asyncio.create_task(fetch_insight(state, avg_window_engagement, dict(payload), curr_alert))
                     
