@@ -50,7 +50,7 @@ export function TeacherAnalyticsPage() {
   const courseDonut = useMemo(() => {
     return courses
       .map((course) => ({
-        name: course.course_code,
+        name: course.course_name,
         value: sessions.filter((session) => session.course_id === course.id).length,
       }))
       .filter((d) => d.value > 0)
@@ -166,7 +166,7 @@ export function TeacherAnalyticsPage() {
 
       <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="text-lg font-semibold text-slate-900">Course Workload Split</h3>
-        <p className="text-sm text-slate-500">Sessions by course code</p>
+        <p className="text-sm text-slate-500">Sessions by course name</p>
         <div className="mt-6 flex h-80 flex-row items-center">
           <div className="h-full flex-1">
             <ResponsiveContainer width="100%" height="100%">
