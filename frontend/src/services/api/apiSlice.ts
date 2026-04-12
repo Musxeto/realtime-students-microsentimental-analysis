@@ -99,6 +99,15 @@ export interface AlertConfigRequest {
   enabled: boolean
 }
 
+export interface AuditLog {
+  id: number
+  timestamp: string
+  user_id: number | null
+  course_id: number | null
+  action: string
+  details: Record<string, any> | null
+}
+
 export interface SessionMetricsResponse {
   session_id: number
   avg_latency_ms: number | null
@@ -302,7 +311,7 @@ export const apiSlice = createApi({
     }),
     getCourses: builder.query<
       CourseListResponse,
-      { search?: string; semester?: number; section?: number; instructor_id?: number | null; limit?: number; offset?: number } | void
+      { search?: string; semester?: number; section?: number; instructor_id?: number | null; limit?: number; offset?: number; include_videos?: boolean } | void
     >({
       query: (params) => ({
         url: '/courses',
@@ -438,6 +447,10 @@ export const apiSlice = createApi({
       query: (teacherId) => `/admin/teachers/${teacherId}/project`,
       providesTags: ['Teacher', 'Course', 'Session'],
     }),
+    getCourseHistory: builder.query<AuditLog[], number>({
+      query: (courseId) => `/courses/${courseId}/history`,
+      providesTags: ['Course'],
+    }),
   }),
 })
 
@@ -466,4 +479,5 @@ export const {
   useAdminResetUserPasswordMutation,
   useGetTeacherAnalyticsQuery,
   useGetTeacherProjectPageQuery,
+  useGetCourseHistoryQuery,
 } = apiSlice

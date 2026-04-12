@@ -58,6 +58,7 @@ export function LiveSessionPage() {
   const frameW = lastJsonMessage?.frame_width ?? 1
   const frameH = lastJsonMessage?.frame_height ?? 1
   const overlayDetections = detections
+  const alert_active = alertState?.active
   const [alertHistory, setAlertHistory] = useState<Array<{ id: number; msg: string; time: string }>>([])
 
   useEffect(() => {
@@ -186,7 +187,7 @@ export function LiveSessionPage() {
             : null}
 
           <div className="absolute left-4 top-4 rounded-xl bg-black/40 px-4 py-2.5 text-xs text-white shadow-lg backdrop-blur-md border border-white/10">
-            <p className="font-bold tracking-wide">Session {id} <span className="mx-2 text-slate-400">•</span> {connectionLabel}</p>
+            <p className="font-bold tracking-wide">{lastJsonMessage?.course_name || 'Class'} <span className="mx-2 text-slate-400">•</span> {connectionLabel}</p>
             <div className="mt-1 flex gap-3 text-slate-300">
               <p>Time: <span className="font-semibold text-white">{typeof runtimeSec === 'number' ? `${runtimeSec}s` : '-'}</span></p>
               <p>Frame: <span className="font-semibold text-white">#{lastJsonMessage?.frame_index ?? '-'}</span></p>
@@ -246,32 +247,58 @@ export function LiveSessionPage() {
                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
                  Ending...
                </>
-             ) : 'End Session'}
+             ) : 'End Class'}
             </button>
           </div>
         </div>
 
-        <div className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition-colors duration-300 ${alertState?.active ? 'border-rose-300' : 'border-slate-200'}`}>
-          <div className={`border-b px-6 py-4 ${alertState?.active ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-100'}`}>
-            <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-800">
-              AI Co-Pilot Alert
-              {alertState?.active && (
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500"></span>
-                </span>
-              )}
+        <div className={`group relative overflow-hidden rounded-3xl border transition-all duration-500 shadow-xl backdrop-blur-xl ${
+          alert_active 
+            ? 'border-rose-400/50 bg-rose-500/10 shadow-rose-500/10' 
+            : 'border-white/20 bg-white/10 shadow-indigo-500/5'
+        }`}>
+          <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/5 opacity-50" />
+          
+          <div className={`relative border-b px-6 py-4 backdrop-blur-md ${
+            alert_active ? 'border-rose-400/30 bg-rose-500/20' : 'border-white/20 bg-indigo-500/20'
+          }`}>
+            <h3 className="flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-white">
+              <div className={`h-2.5 w-2.5 rounded-full ${alert_active ? 'animate-pulse bg-rose-500 shadow-[0_0_10px_#f43f5e]' : 'bg-indigo-400 shadow-[0_0_10px_#818cf8]'}`} />
+              AI Co-Pilot Advisor
             </h3>
           </div>
-          <div className="p-6">
-            <p className={`font-medium ${alertState?.active ? 'text-rose-600' : 'text-slate-600'}`}>
-              {alertState?.active
-                ? alertState.reason || 'Low engagement alert is active.'
-                : lastJsonMessage?.message
-                  ? lastJsonMessage.message
-                  : 'No intervention required yet. Alerts will appear on sustained low engagement.'}
-            </p>
+          
+          <div className="relative p-6">
+            <div className="flex items-start gap-4">
+              <div className={`mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border backdrop-blur-md transition-transform duration-300 group-hover:scale-110 ${
+                alert_active ? 'border-rose-400/50 bg-rose-500/20 text-rose-200' : 'border-indigo-400/50 bg-indigo-500/20 text-indigo-200'
+              }`}>
+                {alert_active ? (
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                ) : (
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.674a3 3 0 01-5.996 0zm5.117-2.83a5.007 5.007 0 011.557-1.27l.534-.406a3.996 3.996 0 000-6.492l-.534-.406a5.007 5.007 0 01-1.557-1.27c-.435-.547-1.015-.974-1.745-1.22L12 2.32c-.329-.104-.671-.104-1 0l-.338.106c-.73.246-1.31.673-1.745 1.22a5.007 5.007 0 01-1.557 1.27l-.534.406a3.996 3.996 0 000 6.492l.534.406a5.007 5.007 0 011.557 1.27c.435.547 1.015.974 1.745 1.22L11 16.68c.329.104.671.104 1 0l.338-.106c.73-.246 1.31-.673 1.745-1.22z" /></svg>
+                )}
+              </div>
+              
+              <div className="space-y-1">
+                <p className={`text-base font-bold leading-relaxed tracking-tight ${alert_active ? 'text-white' : 'text-slate-100'}`}>
+                  {alert_active
+                    ? alertState.reason || 'Sustained low engagement detected.'
+                    : lastJsonMessage?.message
+                      ? lastJsonMessage.message.replace('AI Coach: ', '')
+                      : 'Monitoring class engagement in real-time. Advisor suggestions will appear here.'}
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className={`h-1 w-1 rounded-full ${alert_active ? 'bg-rose-400' : 'bg-indigo-400'}`} />
+                  <p className={`text-[10px] font-black uppercase tracking-widest ${alert_active ? 'text-rose-300' : 'text-indigo-300'}`}>
+                    Live Pedagogical Stream
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
+          
+          <div className={`absolute bottom-0 left-0 h-[2px] w-full transition-transform duration-1000 ${alert_active ? 'bg-rose-500' : 'bg-indigo-500'}`} style={{ transform: `scaleX(${readyState === 1 ? 1 : 0})` }} />
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

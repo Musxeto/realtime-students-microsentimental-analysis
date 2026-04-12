@@ -35,6 +35,7 @@ export interface SessionPayload {
     status?: string
   }>
   message?: string
+  course_name?: string
   alert_state?: {
     active: boolean
     reason: string

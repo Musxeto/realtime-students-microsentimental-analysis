@@ -15,6 +15,7 @@ import {
 } from 'recharts'
 import { useConfirm } from '../../../app/confirm'
 import { useEndSessionMutation, useGetCoursesQuery, useGetSessionsQuery } from '../../../services/api/apiSlice'
+import { useAppSelector } from '../../../app/hooks'
 
 type StatusFilter = 'ALL' | 'PENDING' | 'RUNNING' | 'PAUSED' | 'COMPLETED'
 
@@ -111,9 +112,9 @@ export function TeacherDashboardPage() {
 
   const onEndSession = async (sessionId: number) => {
     const approved = await confirm({
-      title: 'End session',
-      message: 'Are you sure you want to end this session now?',
-      confirmText: 'End Session',
+      title: 'End class',
+      message: 'Are you sure you want to end this class now?',
+      confirmText: 'End Class',
       cancelText: 'Cancel',
       destructive: true,
     })
@@ -121,11 +122,14 @@ export function TeacherDashboardPage() {
     try {
       await endSession(sessionId).unwrap()
       await refetchSessions()
-      toast.success('Session ended successfully')
+      toast.success('Class ended successfully')
     } catch {
-      toast.error('Failed to end session')
+      toast.error('Failed to end class')
     }
   }
+
+  const role = useAppSelector(state => state.auth.role)
+  const isAdmin = role === 'ADMIN'
 
   const COLORS_STATUS = ['#10b981', '#3b82f6', '#f59e0b', '#94a3b8'] // emerald, blue, amber, slate
 
@@ -137,7 +141,7 @@ export function TeacherDashboardPage() {
             <BarChart3 className="h-8 w-8 text-indigo-600" />
             Teacher Dashboard
           </h1>
-          <p className="mt-2 text-sm font-medium text-slate-600">Your own classes, sessions, and engagement analytics in one place.</p>
+          <p className="mt-2 text-sm font-medium text-slate-600">Your own classes and engagement analytics in one place.</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -148,13 +152,15 @@ export function TeacherDashboardPage() {
             <RefreshCw className="h-4 w-4" />
             Refresh
           </button>
-          <Link
-            to="/session/start"
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 shadow-indigo-600/20 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:bg-indigo-500 hover:shadow-lg"
-          >
-            <CirclePlay className="h-4 w-4" />
-            Start Session
-          </Link>
+          {!isAdmin && (
+            <Link
+              to="/session/start"
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 shadow-indigo-600/20 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:bg-indigo-500 hover:shadow-lg"
+            >
+              <CirclePlay className="h-4 w-4" />
+              Start Class
+            </Link>
+          )}
         </div>
       </div>
 
@@ -172,7 +178,7 @@ export function TeacherDashboardPage() {
         </div>
         
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md">
-          <p className="text-sm font-medium uppercase tracking-wider text-slate-500">Total Sessions</p>
+          <p className="text-sm font-medium uppercase tracking-wider text-slate-500">Total Classes</p>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-4xl font-extrabold tracking-tight text-slate-900">{sessions.length}</span>
           </div>
@@ -180,7 +186,7 @@ export function TeacherDashboardPage() {
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md">
-          <p className="text-sm font-medium uppercase tracking-wider text-slate-500">Active Sessions</p>
+          <p className="text-sm font-medium uppercase tracking-wider text-slate-500">Active Classes</p>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-4xl font-extrabold tracking-tight text-blue-600">{activeSessions}</span>
           </div>
@@ -192,7 +198,7 @@ export function TeacherDashboardPage() {
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-4xl font-extrabold tracking-tight">{avgEngagement}%</span>
           </div>
-          <p className="mt-1 text-xs text-indigo-100/70">Completed sessions only</p>
+          <p className="mt-1 text-xs text-indigo-100/70">Completed classes only</p>
         </div>
       </div>
 

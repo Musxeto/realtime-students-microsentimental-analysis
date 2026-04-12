@@ -120,3 +120,17 @@ class PerformanceMetric(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     session = relationship("ClassSession", back_populates="performance_metrics")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=True)
+    action = Column(String(100), nullable=False)
+    details = Column(JSON, nullable=True)
+
+    user = relationship("User")
+    course = relationship("Course")

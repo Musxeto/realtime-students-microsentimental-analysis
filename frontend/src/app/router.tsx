@@ -11,6 +11,7 @@ const AdminDashboardPage = lazy(() => import('../features/admin/pages/AdminDashb
 const TeacherProjectPage = lazy(() => import('../features/admin/pages/TeacherProjectPage').then((module) => ({ default: module.TeacherProjectPage })))
 const TeacherDashboardPage = lazy(() => import('../features/teacher/pages/TeacherDashboardPage').then((module) => ({ default: module.TeacherDashboardPage })))
 const TeacherCoursesPage = lazy(() => import('../features/teacher/pages/TeacherCoursesPage').then((module) => ({ default: module.TeacherCoursesPage })))
+const CourseHistoryPage = lazy(() => import('../features/teacher/pages/CourseHistoryPage').then((module) => ({ default: module.CourseHistoryPage })))
 const TeacherSessionsPage = lazy(() => import('../features/teacher/pages/TeacherSessionsPage').then((module) => ({ default: module.TeacherSessionsPage })))
 const TeacherAnalyticsPage = lazy(() => import('../features/teacher/pages/TeacherAnalyticsPage').then((module) => ({ default: module.TeacherAnalyticsPage })))
 const SessionStartPage = lazy(() => import('../features/live-session/pages/SessionStartPage').then((module) => ({ default: module.SessionStartPage })))
@@ -90,6 +91,14 @@ export const router = createBrowserRouter([
         element: withSuspense(
           <ProtectedRoute allow={['teacher', 'admin']}>
             <TeacherCoursesPage />
+          </ProtectedRoute>,
+        ),
+      },
+      {
+        path: 'teacher/courses/:id/history',
+        element: withSuspense(
+          <ProtectedRoute allow={['teacher', 'admin']}>
+            <CourseHistoryPage />
           </ProtectedRoute>,
         ),
       },
