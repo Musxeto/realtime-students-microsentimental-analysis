@@ -13,7 +13,7 @@ from ..config import settings
 from ..database import get_db
 from ..deps import get_admin_user, get_current_user
 from ..models import AlertConfig, ClassSession, Course, User, UserRole, AuditLog
-from ..schemas import AlertConfigOut, AlertConfigRequest, CourseAnalyticsResponse, CourseListResponse, CourseOut, CreateCourseRequest, UpdateCourseRequest, SessionScorePoint
+from ..schemas import AlertConfigOut, AlertConfigRequest, CourseAnalyticsResponse, CourseListResponse, CourseOut, CreateCourseRequest, UpdateCourseRequest, SessionScorePoint, AuditLogOut
 
 
 router = APIRouter(prefix="/courses", tags=["courses"])
