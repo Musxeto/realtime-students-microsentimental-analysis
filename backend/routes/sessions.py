@@ -366,6 +366,10 @@ async def stream_session(websocket: WebSocket, session_id: int):
                     async def fetch_insight(curr_state, payload_snapshot):
                         try:
                             from ..services.gemini_service import gemini_service
+                            import logging
+                            srv_logger = logging.getLogger(__name__)
+                            srv_logger.info(f"Session {session_id}: Requesting Gemini pedagogical insight...")
+                            
                             insight = await gemini_service.generate_pedagogical_insight(
                                 engagement_score=float(payload_snapshot.get("engagement_score", 0.0)),
                                 distracted_count=int(payload_snapshot.get("distracted_count", 0)),
@@ -376,6 +380,9 @@ async def stream_session(websocket: WebSocket, session_id: int):
                             )
                             if insight:
                                 curr_state.ai_insight = insight
+                                srv_logger.info(f"Session {session_id}: AI Insight received: {insight}")
+                            else:
+                                srv_logger.warning(f"Session {session_id}: Gemini returned empty insight.")
                         except Exception as e:
                             import logging
                             logging.getLogger(__name__).error(f"Error fetching AI insight: {e}")

@@ -22,6 +22,7 @@ class GeminiService:
             try:
                 self._client = genai.Client(api_key=settings.gemini_api_key)
                 self._is_configured = True
+                logger.info("Gemini service successfully configured with provided API key.")
             except Exception as e:
                 logger.error(f"Failed to configure Gemini API: {e}")
 
@@ -36,6 +37,7 @@ class GeminiService:
         recent_classes: Optional[list] = None
     ) -> str | None:
         if not self._is_configured:
+            logger.warning("Attempted to generate insight but Gemini service is not configured.")
             return None
 
         engaged_count = max(0, student_count - distracted_count)
@@ -59,12 +61,14 @@ class GeminiService:
         try:
             def sync_generate():
                 return self._client.models.generate_content(
-                    model='gemini-2.5-flash',
+                    model='gemini-3-flash-preview',
                     contents=prompt
                 )
             # We use to_thread to prevent blocking the async event loop with sync requests
             response = await asyncio.to_thread(sync_generate)
-            return response.text.strip().replace('"', '')
+            insight = response.text.strip().replace('"', '')
+            logger.debug(f"Generated AI insight: {insight}")
+            return insight
         except Exception as e:
             logger.error(f"Gemini generation error: {e}")
             return None
