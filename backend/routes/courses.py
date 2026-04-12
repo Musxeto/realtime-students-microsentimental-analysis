@@ -12,7 +12,7 @@ from ai.inference_utils import discover_video_files
 from ..config import settings
 from ..database import get_db
 from ..deps import get_admin_user, get_current_user
-from ..models import AlertConfig, ClassSession, Course, User, UserRole
+from ..models import AlertConfig, ClassSession, Course, User, UserRole, AuditLog
 from ..schemas import AlertConfigOut, AlertConfigRequest, CourseAnalyticsResponse, CourseListResponse, CourseOut, CreateCourseRequest, UpdateCourseRequest, SessionScorePoint
 
 
@@ -66,6 +66,19 @@ def create_course(payload: CreateCourseRequest, current_user: User = Depends(get
         instructor_id=instructor_id,
     )
     db.add(course)
+    db.flush() # Get the ID before commit
+
+    audit = AuditLog(
+        user_id=current_user.id,
+        course_id=course.id,
+        action="COURSE_CREATED",
+        details={
+            "course_name": course.course_name,
+            "instructor_id": instructor_id,
+            "instructor_name": teacher.name if instructor_id and 'teacher' in locals() else None
+        }
+    )
+    db.add(audit)
     try:
         db.commit()
     except IntegrityError:
@@ -92,7 +105,7 @@ def list_courses(
     semester: int | None = Query(default=None),
     section: int | None = Query(default=None),
     instructor_id: int | None = Query(default=None),
-    limit: int = Query(default=10, ge=1, le=100),
+    limit: int | None = Query(default=None, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -115,9 +128,16 @@ def list_courses(
         query = query.filter(Course.section == section)
 
     total = query.count()
-    rows = query.order_by(Course.semester.asc(), Course.course_name.asc()).offset(offset).limit(limit).all()
+    
+    # Apply ordering for consistent results
+    query = query.order_by(Course.semester.asc(), Course.course_name.asc())
+    
+    # Pagination is now optional. If limit is None, return all matching items.
+    if limit is not None:
+        rows = query.offset(offset).limit(limit).all()
+    else:
+        rows = query.all()
 
-    videos = _get_available_videos_cached()
     courses = []
     for course in rows:
         courses.append(
@@ -128,10 +148,10 @@ def list_courses(
                 semester=course.semester,
                 section=course.section,
                 instructor_id=course.instructor_id,
-                available_videos=videos,
+                available_videos=[], # Scanning disk is too slow, frontend should provide pathways or we add a separate picker.
             )
         )
-    return CourseListResponse(items=courses, total=total, limit=limit, offset=offset)
+    return CourseListResponse(items=courses, total=total, limit=limit or total, offset=offset)
 
 
 @router.get("/{course_id}/analytics", response_model=CourseAnalyticsResponse)
@@ -181,6 +201,19 @@ def get_course_analytics(course_id: int, current_user: User = Depends(get_curren
     )
 
 
+@router.get("/{course_id}/history", response_model=list[AuditLogOut])
+def get_course_history(course_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if course is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+    
+    if current_user.role != UserRole.ADMIN and course.instructor_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot view history for this course")
+
+    logs = db.query(AuditLog).filter(AuditLog.course_id == course_id).order_by(AuditLog.timestamp.desc()).all()
+    return logs
+
+
 @router.patch("/{course_id}", response_model=CourseOut)
 def update_course(course_id: int, payload: UpdateCourseRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     course = db.query(Course).filter(Course.id == course_id).first()
@@ -207,7 +240,21 @@ def update_course(course_id: int, payload: UpdateCourseRequest, current_user: Us
                 teacher = db.query(User).filter(User.id == payload.instructor_id, User.role == UserRole.TEACHER).first()
                 if teacher is None:
                     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+                
+                old_id = course.instructor_id
                 course.instructor_id = payload.instructor_id
+                
+                audit = AuditLog(
+                    user_id=current_user.id,
+                    course_id=course.id,
+                    action="TEACHER_ASSIGNED",
+                    details={
+                        "old_instructor_id": old_id,
+                        "new_instructor_id": payload.instructor_id,
+                        "new_instructor_name": teacher.name
+                    }
+                )
+                db.add(audit)
     elif payload.instructor_id is not None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can transfer course ownership")
     
