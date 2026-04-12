@@ -18,6 +18,7 @@ class GeminiService:
     def __init__(self):
         self._is_configured = False
         self._client = None
+        self._backoff_until = 0.0
         if genai is not None and settings.gemini_api_key:
             try:
                 self._client = genai.Client(api_key=settings.gemini_api_key)
@@ -38,6 +39,11 @@ class GeminiService:
     ) -> str | None:
         if not self._is_configured:
             logger.warning("Attempted to generate insight but Gemini service is not configured.")
+            return None
+
+        import time
+        if time.monotonic() < self._backoff_until:
+            logger.info("Gemini call skipped: cooldown active after previous rate-limit (429).")
             return None
 
         engaged_count = max(0, student_count - distracted_count)
@@ -70,7 +76,14 @@ class GeminiService:
             logger.debug(f"Generated AI insight: {insight}")
             return insight
         except Exception as e:
-            logger.error(f"Gemini generation error: {e}")
+            err_str = str(e)
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                import time
+                # Backoff for 60 seconds if rate limited
+                self._backoff_until = time.monotonic() + 60.0
+                logger.error(f"Gemini rate limit hit (429). Backing off for 60s. Details: {err_str}")
+            else:
+                logger.error(f"Gemini generation error: {e}")
             return None
 
 

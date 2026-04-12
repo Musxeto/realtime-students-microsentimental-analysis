@@ -389,18 +389,39 @@ async def stream_session(websocket: WebSocket, session_id: int):
                 state.engagement_window.append(float(payload.get("engagement_score", 0.0)))
                 
                 current_time = monotonic()
-                # Trigger an AI suggestion every 5 seconds 
-                if current_time - getattr(state, 'last_ai_call_at', 0.0) >= 5.0:
+                # Trigger an AI suggestion every 15 seconds to stay within free-tier quota (RPM)
+                # We also check for 'significant change' or forced update after 3 mins
+                if current_time - getattr(state, 'last_ai_call_at', 0.0) >= 15.0:
                     # Calculate average engagement for the window
                     if state.engagement_window:
                         avg_window_engagement = sum(state.engagement_window) / len(state.engagement_window)
                     else:
                         avg_window_engagement = float(payload.get("engagement_score", 0.0))
                     
-                    state.last_ai_call_at = current_time
-                    state.engagement_window = [] # Reset window for next 5 seconds
+                    # Logic to skip unnecessary AI calls:
+                    last_val = getattr(state, 'last_ai_engagement', -1.0)
+                    last_alert = getattr(state, 'last_ai_alert_active', None)
+                    curr_alert = bool(alert_state and alert_state.get("active"))
                     
-                    async def fetch_insight(curr_state, engagement, payload_snapshot):
+                    significant = (
+                        abs(avg_window_engagement - last_val) >= 5.0 or 
+                        curr_alert != last_alert or
+                        (current_time - getattr(state, 'last_ai_call_at', 0.0)) > 180.0
+                    )
+                    
+                    state.engagement_window = [] # Reset window for next segment
+                    
+                    if not significant and last_val != -1.0:
+                        # Skip this call to save quota, but still update the timer
+                        state.last_ai_call_at = current_time
+                        import logging
+                        logging.getLogger(__name__).debug(f"Session {session_id}: Skipping AI call (No significant change).")
+                    else:
+                        state.last_ai_call_at = current_time
+                        state.last_ai_engagement = avg_window_engagement
+                        state.last_ai_alert_active = curr_alert
+                        
+                        async def fetch_insight(curr_state, engagement, payload_snapshot, alert_status):
                         try:
                             from ..services.gemini_service import gemini_service
                             import logging
@@ -411,7 +432,7 @@ async def stream_session(websocket: WebSocket, session_id: int):
                                 engagement_score=engagement,
                                 distracted_count=int(payload_snapshot.get("distracted_count", 0)),
                                 student_count=int(payload_snapshot.get("student_count", 0)),
-                                alert_active=bool(curr_state.alert_active),
+                                alert_active=alert_status,
                                 course_code=curr_state.course_code_str or "Class",
                                 teacher_name=curr_state.teacher_name_str or "Teacher"
                             )
@@ -424,7 +445,7 @@ async def stream_session(websocket: WebSocket, session_id: int):
                             import logging
                             logging.getLogger(__name__).error(f"Error fetching AI insight: {e}")
                             
-                    asyncio.create_task(fetch_insight(state, avg_window_engagement, dict(payload)))
+                    asyncio.create_task(fetch_insight(state, avg_window_engagement, dict(payload), curr_alert))
                     
                 if state.ai_insight:
                     # Dynamically inject the Gemini insight into the stream
