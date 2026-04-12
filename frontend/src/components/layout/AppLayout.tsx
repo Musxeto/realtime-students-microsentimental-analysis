@@ -37,6 +37,10 @@ export function AppLayout() {
       // Even if server logout fails, clear local auth.
     }
     dispatch(logout())
+    // CLEAR RTK QUERY CACHE to prevent stale data between user sessions
+    import('../../services/api/apiSlice').then(({ apiSlice }) => {
+      dispatch(apiSlice.util.resetApiState())
+    })
     navigate('/login', { replace: true })
   }
 
