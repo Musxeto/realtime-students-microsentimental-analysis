@@ -58,6 +58,7 @@ export function LiveSessionPage() {
   const frameW = lastJsonMessage?.frame_width ?? 1
   const frameH = lastJsonMessage?.frame_height ?? 1
   const overlayDetections = detections
+  const alert_active = alertState?.active
   const [alertHistory, setAlertHistory] = useState<Array<{ id: number; msg: string; time: string }>>([])
 
   useEffect(() => {
@@ -282,7 +283,7 @@ export function LiveSessionPage() {
               <div className="space-y-1">
                 <p className={`text-base font-bold leading-relaxed tracking-tight ${alert_active ? 'text-white' : 'text-slate-100'}`}>
                   {alert_active
-                    ? alert_state.reason || 'Sustained low engagement detected.'
+                    ? alertState.reason || 'Sustained low engagement detected.'
                     : lastJsonMessage?.message
                       ? lastJsonMessage.message.replace('AI Coach: ', '')
                       : 'Monitoring class engagement in real-time. Advisor suggestions will appear here.'}
