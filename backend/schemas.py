@@ -124,6 +124,7 @@ class StartSessionRequest(BaseModel):
 class StartSessionResponse(BaseModel):
     session_id: int
     course_id: int
+    course_name: str
     status: str
     start_time: datetime
 
@@ -137,6 +138,8 @@ class EndSessionResponse(BaseModel):
 class SessionOut(BaseModel):
     id: int
     course_id: int
+    course_name: Optional[str] = None
+    instructor_name: Optional[str] = None
     status: str
     start_time: datetime
     end_time: datetime | None = None
@@ -221,6 +224,7 @@ class TeacherSessionAnalytics(BaseModel):
     session_id: int
     course_id: int
     course_name: str
+    instructor_name: Optional[str] = None
     start_time: datetime
     end_time: datetime | None
     status: str
@@ -267,3 +271,14 @@ class ErrorResponse(BaseModel):
     error_code: str
     message: str
     details: dict[str, Any] | None = None
+
+
+class AuditLogOut(BaseModel):
+    id: int
+    timestamp: datetime
+    user_id: int | None
+    course_id: int | None
+    action: str
+    details: dict[str, Any] | None = None
+    
+    model_config = ConfigDict(from_attributes=True)

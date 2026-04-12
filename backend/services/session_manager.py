@@ -34,6 +34,7 @@ class LiveSessionState:
     ai_insight: str | None = None
     last_ai_call_at: float = 0.0
     course_code_str: str | None = None
+    course_name_str: str | None = None
     teacher_name_str: str | None = None
 
 

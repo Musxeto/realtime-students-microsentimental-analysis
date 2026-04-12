@@ -21,7 +21,7 @@ export function TeacherCoursesPage() {
           : 0
         return {
           ...course,
-          sessionCount: related.length,
+          classCount: related.length,
           completedCount: completed.length,
           avgEngagement: avg,
         }
@@ -41,7 +41,7 @@ export function TeacherCoursesPage() {
           <p className="text-sm text-slate-600">Performance and session breakdown for your own courses.</p>
         </div>
         <Link to="/session/start" className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
-          Start Session
+          Start Class
         </Link>
       </div>
 
@@ -60,9 +60,17 @@ export function TeacherCoursesPage() {
             <p className="text-base font-semibold text-slate-900">{course.course_name}</p>
             <p className="text-xs text-slate-500">{course.course_code} • Semester {course.semester} • Section {course.section}</p>
             <div className="mt-3 space-y-1 text-sm text-slate-600">
-              <p>Sessions: {course.sessionCount}</p>
+              <p>Classes: {course.classCount}</p>
               <p>Completed: {course.completedCount}</p>
               <p>Avg Engagement: {course.avgEngagement}%</p>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Link
+                to={`/teacher/courses/${course.id}/history`}
+                className="flex-1 rounded-lg border border-slate-200 bg-white py-2 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+              >
+                View History
+              </Link>
             </div>
             <div className="mt-3 h-2 w-full overflow-hidden rounded bg-slate-100">
               <div className="h-full rounded bg-indigo-500" style={{ width: `${Math.min(100, Math.max(0, course.avgEngagement))}%` }} />
