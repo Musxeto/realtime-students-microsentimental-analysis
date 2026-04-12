@@ -107,6 +107,7 @@ def list_courses(
     instructor_id: int | None = Query(default=None),
     limit: int | None = Query(default=None, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
+    include_videos: bool = Query(default=False),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -138,6 +139,8 @@ def list_courses(
     else:
         rows = query.all()
 
+    videos = _get_available_videos_cached() if include_videos else []
+    
     courses = []
     for course in rows:
         courses.append(
@@ -148,7 +151,7 @@ def list_courses(
                 semester=course.semester,
                 section=course.section,
                 instructor_id=course.instructor_id,
-                available_videos=[], # Scanning disk is too slow, frontend should provide pathways or we add a separate picker.
+                available_videos=videos,
             )
         )
     return CourseListResponse(items=courses, total=total, limit=limit or total, offset=offset)

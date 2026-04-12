@@ -311,7 +311,7 @@ export const apiSlice = createApi({
     }),
     getCourses: builder.query<
       CourseListResponse,
-      { search?: string; semester?: number; section?: number; instructor_id?: number | null; limit?: number; offset?: number } | void
+      { search?: string; semester?: number; section?: number; instructor_id?: number | null; limit?: number; offset?: number; include_videos?: boolean } | void
     >({
       query: (params) => ({
         url: '/courses',
