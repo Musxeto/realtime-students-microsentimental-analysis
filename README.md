@@ -1,9 +1,24 @@
-# Real-Time Students Micro-Sentimental Analysis
+# Real-Time Students Micro-Sentimental Analysis using Computer Vision
 
-End-to-end FYP platform for classroom behavior analytics using YOLO-based inference, a FastAPI backend, PostgreSQL storage, and a modern React dashboard.
+**Authors:**
+- Ghulam Mustafa (Fa-2022/BSCS/188) - fa22-bscs-188@lgu.edu.pk
+- Ammad Rasheed (Fa-2022/BSCS/199) - fa22-bscs-199@lgu.edu.pk
+
+**Supervisor:**
+- Sir Hassan Sultan (Department of Computer Science, Lahore Garrison University)
+
+---
+
+End-to-end FYP platform for classroom behavior analytics using YOLOv11-based inference, a FastAPI backend, PostgreSQL storage, and a modern React dashboard.
 
 ## What This Project Does
 
+- Runs real-time classroom analysis from video feeds (720p/30FPS).
+- Detects student behaviors (Writing, Raising Hand, Sleeping, Phone Use, etc.) via YOLOv11.
+- Calculates an Aggregate Engagement Score every 3-5 seconds.
+- Streams live metrics and overlays through WebSockets to a React dashboard.
+- Persists session logs and historical metrics in PostgreSQL for reporting.
+- Supports role-based workflows for teachers (live sessions) and admins (management).
 - Runs frame-by-frame classroom analysis from video input.
 - Streams live metrics through WebSocket.
 - Persists sessions and logs in PostgreSQL.
@@ -14,9 +29,10 @@ End-to-end FYP platform for classroom behavior analytics using YOLO-based infere
 
 ### AI and Inference
 
-- Ultralytics YOLO pipeline in [ai/inference_utils.py](ai/inference_utils.py)
-- ONNX Runtime DirectML on Windows for AMD acceleration
-- CPU fallback if GPU acceleration is unavailable
+- **YOLOv11** pipeline for real-time object detection and classification.
+- Trained on 17,000+ images with an 8-class behavior taxonomy.
+- ONNX Runtime DirectML for hardware acceleration on Windows (AMD/NVIDIA).
+- Two-Stage Cascade Architecture for robust detection in crowded classrooms.
 
 ### Backend
 
@@ -293,9 +309,18 @@ npm run build
 
 ## Project Status
 
-- Backend auth, RBAC, admin workflows, course analytics, alert configuration, session metrics, and websocket streaming are implemented.
-- Frontend has role-based login redirects, working admin and teacher dashboards, live session runtime controls, and realtime engagement/alert views.
-- Backend API tests and frontend production build pass on current branch.
+- ✅ Backend auth, RBAC, admin workflows, course analytics, alert configuration, session metrics, and websocket streaming are implemented.
+- ✅ Frontend has role-based login redirects, working admin and teacher dashboards, live session runtime controls, and realtime engagement/alert views.
+- ✅ Admin Dashboard enhancements completed (pagination, searching, filtering for teachers and courses).
+- ✅ Video Inference Session Errors fixed (dynamic handling of image resizing for ONNX YOLO model).
+- ✅ Live Gemini AI Coaching securely integrated for real-time pedagogical suggestions.
+
+**⚠️ Urgent Next Steps:**
+- **Frontend Improvements:** We need frontend improvements now to enhance the design and user experience.
+- **Model Retraining:** The AI model needs to be retrained or needs better tweaks because it is tweaking a lot right now!
+- **Frontend Aesthetic Polish**: Implement a premium, modern design for the teacher dashboard to enhance UX.
+- **Model Fine-Tuning**: Retrain/tweak the YOLOv11 model to reduce "instability/tweaking" in crowded scenes.
+- **Live Reporting**: Finalize the periodic report generation module as per SRS REQ-8.
 
 Known non-blocking items:
 
