@@ -415,6 +415,7 @@ class ClassroomAnalyzer:
             # UX hack: treat unknown students as look_forward instead of surfacing unknown.
             if label == "unknown":
                 label = "look_forward"
+                confidence = 0.89
 
             detections.append(
                 {
