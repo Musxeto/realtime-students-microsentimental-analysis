@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AlertCircle, BarChart3, BookOpen, ChevronLeft, ChevronRight, Filter, KeyRound, LineChart, Pencil, Plus, Search, Settings, Sparkles, Trash2, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Link } from 'react-router-dom'
@@ -10,6 +10,7 @@ import {
   useDeleteCourseMutation,
   useGetCoursesQuery,
   useGetTeachersQuery,
+  useGetSessionsQuery,
   useUpdateAlertConfigMutation,
   useUpdateTeacherMutation,
   useUpdateCourseMutation,
@@ -65,12 +66,14 @@ export function AdminDashboardPage() {
     limit: pageSize,
     offset: coursePage * pageSize,
   })
+  const { data: sessionsData } = useGetSessionsQuery({ limit: 200, offset: 0 })
 
   const teachers = teachersData?.items ?? []
   const teacherOptions = allTeachersData?.items ?? teachers
   const teachersTotal = teachersData?.total ?? 0
   const courses = coursesData?.items ?? []
   const coursesTotal = coursesData?.total ?? 0
+  const sessions = sessionsData?.items ?? []
 
   // Tab state
   const [activeTab, setActiveTab] = useState<Tab>('overview')
@@ -247,6 +250,15 @@ export function AdminDashboardPage() {
   // STATS CARDS
   const totalSessions = teachers.reduce((sum, t) => sum + t.session_count, 0)
   const totalCoursesAssigned = teachers.reduce((sum, t) => sum + t.course_count, 0)
+  const avgEngagement = useMemo(() => {
+    const completedScores = sessions
+      .filter((session) => session.final_avg_score != null)
+      .map((session) => Number(session.final_avg_score))
+
+    return completedScores.length
+      ? Math.round((completedScores.reduce((sum, score) => sum + score, 0) / completedScores.length) * 10) / 10
+      : 0
+  }, [sessions])
 
   return (
     <div className="space-y-6 rounded-2xl bg-gradient-to-br from-slate-50 via-white to-blue-50 p-4 md:p-6">
@@ -329,11 +341,7 @@ export function AdminDashboardPage() {
                 <div>
                   <p className="text-sm font-medium text-slate-600">Avg Engagement</p>
                   <p className="mt-2 text-3xl font-bold text-slate-900">
-                    {teachers.length > 0
-                      ? Math.round(
-                          (teachers.reduce((sum, t) => sum + (t.session_count > 0 ? 70 : 0), 0) / teachers.length) * 10
-                        ) / 10
-                      : 0}
+                    {avgEngagement}
                     %
                   </p>
                 </div>
