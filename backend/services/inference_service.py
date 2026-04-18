@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from time import perf_counter
 from pathlib import Path
 from typing import AsyncIterator
+from urllib.parse import urlparse
 import cv2
 
 from ai.inference_utils import ClassroomAnalyzer, encode_frame_preview
@@ -18,11 +20,53 @@ class InferenceService:
             self._analyzer = ClassroomAnalyzer()
         return self._analyzer
 
-    async def stream_video(self, video_path: Path, frame_step: int = 5) -> AsyncIterator[dict]:
+    def _candidate_sources(self, video_source: str | Path) -> list[str]:
+        source = str(video_source).strip()
+        if not source:
+            return []
+
+        parsed = urlparse(source)
+        host_port_pattern = re.compile(r"^[A-Za-z0-9_.-]+:\d{2,5}(?:/.*)?$")
+
+        if parsed.scheme in {"rtsp", "http", "https"}:
+            if parsed.scheme in {"http", "https"} and not parsed.path:
+                return [
+                    f"{source}/video",
+                    f"{source}/mjpeg",
+                    f"{source}/stream",
+                    f"{source}/live",
+                    source,
+                ]
+            return [source]
+
+        if host_port_pattern.match(source):
+            base = f"http://{source}"
+            return [
+                f"{base}/video",
+                f"{base}/mjpeg",
+                f"{base}/stream",
+                f"{base}/live",
+                base,
+            ]
+
+        return [source]
+
+    async def stream_video(self, video_path: str | Path, frame_step: int = 5) -> AsyncIterator[dict]:
         analyzer = self.ensure_analyzer()
-        cap = cv2.VideoCapture(str(video_path))
-        if not cap.isOpened():
-            raise RuntimeError(f"Could not open video: {video_path}")
+        tried_sources = self._candidate_sources(video_path)
+        cap = None
+        active_source = None
+        for candidate in tried_sources:
+            candidate_cap = cv2.VideoCapture(candidate)
+            if candidate_cap.isOpened():
+                cap = candidate_cap
+                active_source = candidate
+                break
+            candidate_cap.release()
+
+        if cap is None:
+            raise RuntimeError(f"Could not open video source: {video_path}. Tried: {tried_sources}")
+
         fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
         frame_index = 0
         emitted_frames = 0
@@ -60,6 +104,7 @@ class InferenceService:
                 payload["processed_frames"] = emitted_frames
                 payload["live_fps"] = round(emitted_frames / max(runtime_sec, 1e-6), 2)
                 payload["source_fps"] = round(float(fps), 2) if fps > 0 else None
+                payload["source"] = active_source
                 payload["frame_step"] = frame_step
                 payload["stream_schema_version"] = 2
                 payload["student_count"] = int(

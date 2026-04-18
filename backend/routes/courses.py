@@ -40,7 +40,9 @@ def _get_available_videos_cached() -> list[str]:
         str(path.relative_to(settings.video_root)) if path.is_relative_to(settings.video_root) else str(path)
         for path in discover_video_files([settings.video_root, settings.ai_dir])
     ]
-    _video_cache_payload = videos
+    configured_streams = [source.strip() for source in settings.ip_camera_stream_sources if source.strip()]
+    merged_sources = list(dict.fromkeys([*videos, *configured_streams]))
+    _video_cache_payload = merged_sources
     _video_cache_expires_at = now + _VIDEO_CACHE_TTL_SECONDS
     return _video_cache_payload
 

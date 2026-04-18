@@ -18,6 +18,13 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_csv(name: str, default: list[str] | None = None) -> list[str]:
+    raw = os.getenv(name)
+    if raw is None:
+        return list(default or [])
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 @dataclass(slots=True)
 class Settings:
     app_name: str = "Real-time Students Micro-Sentimental Analysis"
@@ -30,6 +37,12 @@ class Settings:
     database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", "postgresql+psycopg2://postgres:1234@localhost:5432/fyp"))
     ai_dir: Path = field(default_factory=lambda: Path(os.getenv("AI_DIR", str(BASE_DIR / "ai"))))
     video_root: Path = field(default_factory=lambda: Path(os.getenv("VIDEO_ROOT", str(BASE_DIR / "ai"))))
+    ip_camera_stream_sources: list[str] = field(
+        default_factory=lambda: _env_csv(
+            "IP_CAMERA_STREAM_SOURCES",
+            default=["http://192.168.100.118:8080/video"],
+        )
+    )
     session_log_batch_size: int = field(default_factory=lambda: int(os.getenv("SESSION_LOG_BATCH_SIZE", "60")))
     session_log_flush_interval_seconds: float = field(default_factory=lambda: float(os.getenv("SESSION_LOG_FLUSH_INTERVAL_SECONDS", "1.0")))
     session_disconnect_timeout_seconds: int = field(default_factory=lambda: int(os.getenv("SESSION_DISCONNECT_TIMEOUT_SECONDS", "30")))
