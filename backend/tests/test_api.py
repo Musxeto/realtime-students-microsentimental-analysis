@@ -198,6 +198,51 @@ def test_session_start_end_and_websocket_stream(client, monkeypatch):
     assert end.json()["status"] == "COMPLETED"
 
 
+def test_courses_include_configured_ip_stream_source(client):
+    admin_token = _login(client, "admin@fyp.com", "admin123")
+
+    response = client.get(
+        "/courses",
+        params={"include_videos": True, "limit": 100},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert response.status_code == 200
+
+    items = response.json()["items"]
+    assert len(items) > 0
+    flattened_sources = [
+        source
+        for course in items
+        for source in course.get("available_videos", [])
+    ]
+    assert any("192.168.100.118:8080" in source for source in flattened_sources)
+
+
+def test_start_session_accepts_ip_stream_source(client, monkeypatch):
+    admin_token = _login(client, "admin@fyp.com", "admin123")
+
+    monkeypatch.setattr(inference_service, "stream_video", _MockStream())
+
+    courses_data = client.get("/courses", params={"limit": 100}, headers={"Authorization": f"Bearer {admin_token}"}).json()
+    course_id = courses_data["items"][0]["id"]
+
+    start = client.post(
+        "/sessions/start",
+        json={
+            "course_id": course_id,
+            "video_path": "192.168.100.118:8080",
+            "frame_step": 5,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert start.status_code == 200
+    session_id = start.json()["session_id"]
+
+    detail = client.get(f"/sessions/{session_id}", headers={"Authorization": f"Bearer {admin_token}"})
+    assert detail.status_code == 200
+    assert detail.json()["video_path"] == "192.168.100.118:8080"
+
+
 def test_sessions_list_and_detail_endpoints(client, monkeypatch):
     admin_token = _login(client, "admin@fyp.com", "admin123")
     teacher_token = _login(client, "teacher@fyp.com", "teacher123")

@@ -14,6 +14,8 @@ from ultralytics import YOLO
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 AI_DIR = SCRIPT_DIR
+_NETWORK_SOURCE_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
+_HOST_PORT_RE = re.compile(r"^[A-Za-z0-9_.-]+:\d{2,5}(?:/.*)?$")
 
 
 def resolve_person_model(ai_dir: Path) -> Path:
@@ -44,8 +46,11 @@ def resolve_behavior_model(ai_dir: Path) -> Path:
     raise FileNotFoundError(f"Behavior model not found under {ai_dir / 'fyp_runs'}")
 
 
-def resolve_video_path(ai_dir: Path, user_path: str | None, script_dir: Path = SCRIPT_DIR) -> Path:
+def resolve_video_path(ai_dir: Path, user_path: str | None, script_dir: Path = SCRIPT_DIR) -> Path | str:
     if user_path:
+        normalized = user_path.strip()
+        if _NETWORK_SOURCE_RE.match(normalized) or _HOST_PORT_RE.match(normalized):
+            return normalized
         p = Path(user_path)
         if p.exists():
             return p
