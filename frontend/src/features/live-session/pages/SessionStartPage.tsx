@@ -2,6 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useGetCoursesQuery, useStartSessionMutation } from '../../../services/api/apiSlice'
 
+function formatStreamLabel(source: string): string {
+  const trimmed = source.trim()
+  const urlMatch = trimmed.match(/^https?:\/\/(?:[^/]+)\/(.+)$/i)
+  const value = (urlMatch?.[1] ?? trimmed).replace(/\\/g, '/')
+  const lastSegment = value.split('/').filter(Boolean).pop() ?? value
+  return lastSegment.replace(/\.[^.]+$/, '')
+}
+
 export function SessionStartPage() {
   const navigate = useNavigate()
   const { data: coursesData, isLoading } = useGetCoursesQuery({ limit: 100, include_videos: true })
@@ -18,10 +26,17 @@ export function SessionStartPage() {
     }
   }, [courseId, courses])
 
-  const availableVideos = useMemo(
-    () => Array.from(new Set(courses.flatMap((course) => course.available_videos ?? []))),
-    [courses],
+  const selectedCourse = useMemo(
+    () => courses.find((course) => course.id === courseId) ?? null,
+    [courses, courseId],
   )
+
+  const availableVideos = useMemo(() => {
+    if (selectedCourse) {
+      return Array.from(new Set(selectedCourse.available_videos ?? []))
+    }
+    return Array.from(new Set(courses.flatMap((course) => course.available_videos ?? [])))
+  }, [courses, selectedCourse])
 
   useEffect(() => {
     if (availableVideos.length) {
@@ -102,6 +117,43 @@ export function SessionStartPage() {
           </datalist>
         ) : null}
       </label>
+
+      <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-slate-800">
+            ClassStreams for {selectedCourse?.course_name ?? 'selected course'} ({availableVideos.length})
+          </p>
+          {videoPath ? (
+            <span className="text-xs text-slate-600" title={videoPath}>
+              Selected: {formatStreamLabel(videoPath)}
+            </span>
+          ) : null}
+        </div>
+
+        {availableVideos.length > 0 ? (
+          <div className="max-h-44 space-y-1 overflow-y-auto pr-1">
+            {availableVideos.map((source) => (
+              <button
+                key={source}
+                type="button"
+                onClick={() => setVideoPath(source)}
+                title={source}
+                className={`w-full rounded-md border px-2 py-1 text-left text-xs transition ${
+                  videoPath === source
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {formatStreamLabel(source)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {availableVideos.length === 0 ? (
+          <p className="text-xs text-slate-500">No detected sources for this course yet.</p>
+        ) : null}
+      </div>
 
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
 

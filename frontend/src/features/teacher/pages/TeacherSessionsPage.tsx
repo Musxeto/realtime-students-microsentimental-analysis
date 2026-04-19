@@ -9,7 +9,7 @@ type StatusFilter = 'ALL' | 'PENDING' | 'RUNNING' | 'PAUSED' | 'COMPLETED'
 export function TeacherSessionsPage() {
   const confirm = useConfirm()
   const { data: sessionsData, isLoading, isError, refetch } = useGetSessionsQuery({ limit: 200, offset: 0 })
-  const { data: coursesData } = useGetCoursesQuery({ limit: 100, offset: 0 })
+  const { data: coursesData, isLoading: isCoursesLoading } = useGetCoursesQuery({ limit: 100, offset: 0 })
   const [endSession, { isLoading: isEnding }] = useEndSessionMutation()
 
   const [search, setSearch] = useState('')
@@ -84,9 +84,10 @@ export function TeacherSessionsPage() {
             setCourseId(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))
             setPage(0)
           }}
+          disabled={isCoursesLoading}
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
         >
-          <option value="ALL">All Courses</option>
+          <option value="ALL">{isCoursesLoading ? 'Loading courses...' : 'All Courses'}</option>
           {courses.map((course) => (
             <option key={course.id} value={course.id}>
               {course.course_name}
@@ -109,6 +110,20 @@ export function TeacherSessionsPage() {
         </select>
       </div>
 
+      {isCoursesLoading ? (
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-500" aria-hidden="true" />
+          <span>Loading courses for filter options...</span>
+        </div>
+      ) : null}
+
+      {isLoading ? (
+        <div className="flex items-center gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700">
+          <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-indigo-300 border-t-indigo-700" aria-hidden="true" />
+          <span>Loading sessions...</span>
+        </div>
+      ) : null}
+
       {isError ? <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">Failed to load sessions.</p> : null}
 
       <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -124,6 +139,17 @@ export function TeacherSessionsPage() {
             </tr>
           </thead>
           <tbody>
+            {isLoading ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-6">
+                  <div className="flex items-center justify-center gap-3 text-sm text-slate-600">
+                    <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-600" aria-hidden="true" />
+                    <span>Fetching session records...</span>
+                  </div>
+                </td>
+              </tr>
+            ) : null}
+
             {paged.map((session) => {
               const active = session.status !== 'COMPLETED'
               return (
