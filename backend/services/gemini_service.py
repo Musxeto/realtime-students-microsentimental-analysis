@@ -55,7 +55,7 @@ class GeminiService:
             f"Overall Engagement Score: {engagement_score:.1f}%\n"
             f"Students actively engaged: {engaged_count}\n"
             f"Students distracted/sleeping: {distracted_count}\n\n"
-            "Provide a VERY BRIEF (maximum 12 words) personalized, stylish coaching message. "
+            "Provide a VERY BRIEF personalized, stylish coaching message. these are just examplate bu it want cool ones form yeh"
             "You MUST address the teacher by name (e.g. 'Mr. Smith' or just their first name based on input). "
             "Follow these rules based on the engagement score:\n"
             "- If >= 90%: Sound extremely impressed (e.g. 'Stellar job {teacher_name}! {course_code} is locked in!').\n"

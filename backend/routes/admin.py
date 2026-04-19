@@ -169,32 +169,43 @@ def get_teacher_analytics(teacher_id: int, admin_user: User = Depends(get_admin_
     if teacher is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teacher not found")
 
-    courses = db.query(Course).filter(Course.instructor_id == teacher.id).all()
-    course_analytics: list[TeacherCourseAnalytics] = []
-    total_sessions = 0
-    overall_scores: list[float] = []
-
-    for course in courses:
-        sessions = db.query(ClassSession).filter(ClassSession.course_id == course.id).all()
-        scores = [float(s.final_avg_score) for s in sessions if s.final_avg_score is not None]
-        total_sessions += len(sessions)
-        overall_scores.extend(scores)
-        avg_score = float(sum(scores) / len(scores)) if scores else None
-        course_analytics.append(
-            TeacherCourseAnalytics(
-                course_id=course.id,
-                course_name=course.course_name,
-                sessions_count=len(sessions),
-                avg_final_score=avg_score,
-            )
+    course_stats_rows = (
+        db.query(
+            Course.id.label("course_id"),
+            Course.course_name.label("course_name"),
+            func.count(ClassSession.id).label("sessions_count"),
+            func.avg(ClassSession.final_avg_score).label("avg_final_score"),
         )
+        .outerjoin(ClassSession, ClassSession.course_id == Course.id)
+        .filter(Course.instructor_id == teacher.id)
+        .group_by(Course.id, Course.course_name)
+        .order_by(Course.course_name.asc())
+        .all()
+    )
 
-    overall_avg = float(sum(overall_scores) / len(overall_scores)) if overall_scores else None
+    total_sessions = int(sum(int(row.sessions_count or 0) for row in course_stats_rows))
+    course_analytics = [
+        TeacherCourseAnalytics(
+            course_id=int(row.course_id),
+            course_name=str(row.course_name),
+            sessions_count=int(row.sessions_count or 0),
+            avg_final_score=float(row.avg_final_score) if row.avg_final_score is not None else None,
+        )
+        for row in course_stats_rows
+    ]
+
+    overall_avg_query = (
+        db.query(func.avg(ClassSession.final_avg_score))
+        .join(Course, Course.id == ClassSession.course_id)
+        .filter(Course.instructor_id == teacher.id, ClassSession.final_avg_score.isnot(None))
+        .scalar()
+    )
+    overall_avg = float(overall_avg_query) if overall_avg_query is not None else None
 
     return TeacherAnalyticsResponse(
         teacher_id=teacher.id,
         teacher_name=teacher.name,
-        total_courses=len(courses),
+        total_courses=len(course_stats_rows),
         total_sessions=total_sessions,
         overall_avg_final_score=overall_avg,
         courses=course_analytics,
@@ -208,62 +219,87 @@ def get_teacher_project_page(teacher_id: int, admin_user: User = Depends(get_adm
     if teacher is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teacher not found")
 
-    courses = db.query(Course).filter(Course.instructor_id == teacher.id).order_by(Course.semester.asc(), Course.course_name.asc()).all()
-
-    course_details: list[TeacherCourseDetailAnalytics] = []
-    session_rows: list[TeacherSessionAnalytics] = []
-    overall_scores: list[float] = []
-
-    for course in courses:
-        sessions = (
-            db.query(ClassSession)
-            .filter(ClassSession.course_id == course.id)
-            .order_by(ClassSession.start_time.desc())
-            .all()
+    course_detail_rows = (
+        db.query(
+            Course.id.label("course_id"),
+            Course.course_name.label("course_name"),
+            Course.course_code.label("course_code"),
+            Course.semester.label("semester"),
+            Course.section.label("section"),
+            func.count(ClassSession.id).label("sessions_count"),
+            func.count(ClassSession.final_avg_score).label("completed_sessions_count"),
+            func.avg(ClassSession.final_avg_score).label("avg_final_score"),
+            func.max(ClassSession.final_avg_score).label("peak_final_score"),
+            func.min(ClassSession.final_avg_score).label("lowest_final_score"),
         )
-        scores = [float(s.final_avg_score) for s in sessions if s.final_avg_score is not None]
-        overall_scores.extend(scores)
+        .outerjoin(ClassSession, ClassSession.course_id == Course.id)
+        .filter(Course.instructor_id == teacher.id)
+        .group_by(Course.id, Course.course_name, Course.course_code, Course.semester, Course.section)
+        .order_by(Course.semester.asc(), Course.course_name.asc())
+        .all()
+    )
 
-        course_details.append(
-            TeacherCourseDetailAnalytics(
-                course_id=course.id,
-                course_name=course.course_name,
-                course_code=course.course_code,
-                semester=course.semester,
-                section=course.section,
-                sessions_count=len(sessions),
-                completed_sessions_count=len(scores),
-                avg_final_score=float(sum(scores) / len(scores)) if scores else None,
-                peak_final_score=max(scores) if scores else None,
-                lowest_final_score=min(scores) if scores else None,
-            )
+    course_details: list[TeacherCourseDetailAnalytics] = [
+        TeacherCourseDetailAnalytics(
+            course_id=int(row.course_id),
+            course_name=str(row.course_name),
+            course_code=str(row.course_code),
+            semester=int(row.semester),
+            section=int(row.section),
+            sessions_count=int(row.sessions_count or 0),
+            completed_sessions_count=int(row.completed_sessions_count or 0),
+            avg_final_score=float(row.avg_final_score) if row.avg_final_score is not None else None,
+            peak_final_score=float(row.peak_final_score) if row.peak_final_score is not None else None,
+            lowest_final_score=float(row.lowest_final_score) if row.lowest_final_score is not None else None,
         )
+        for row in course_detail_rows
+    ]
 
-        for session in sessions:
-            session_rows.append(
-                TeacherSessionAnalytics(
-                    session_id=session.id,
-                    course_id=course.id,
-                    course_name=course.course_name,
-                    start_time=session.start_time,
-                    end_time=session.end_time,
-                    status=session.status.value,
-                    final_avg_score=float(session.final_avg_score) if session.final_avg_score is not None else None,
-                )
-            )
+    session_query_rows = (
+        db.query(ClassSession, Course)
+        .join(Course, Course.id == ClassSession.course_id)
+        .filter(Course.instructor_id == teacher.id)
+        .order_by(ClassSession.start_time.desc())
+        .all()
+    )
+    session_rows: list[TeacherSessionAnalytics] = [
+        TeacherSessionAnalytics(
+            session_id=session.id,
+            course_id=course.id,
+            course_name=course.course_name,
+            start_time=session.start_time,
+            end_time=session.end_time,
+            status=session.status.value,
+            final_avg_score=float(session.final_avg_score) if session.final_avg_score is not None else None,
+        )
+        for session, course in session_query_rows
+    ]
 
-    session_rows.sort(key=lambda row: row.start_time, reverse=True)
-    completed_sessions_count = len([score for score in overall_scores])
+    completed_sessions_count_query = (
+        db.query(func.count(ClassSession.id))
+        .join(Course, Course.id == ClassSession.course_id)
+        .filter(Course.instructor_id == teacher.id, ClassSession.final_avg_score.isnot(None))
+        .scalar()
+    )
+    completed_sessions_count = int(completed_sessions_count_query or 0)
+
+    overall_avg_query = (
+        db.query(func.avg(ClassSession.final_avg_score))
+        .join(Course, Course.id == ClassSession.course_id)
+        .filter(Course.instructor_id == teacher.id, ClassSession.final_avg_score.isnot(None))
+        .scalar()
+    )
+    overall_avg = float(overall_avg_query) if overall_avg_query is not None else None
 
     return TeacherProjectPageResponse(
         teacher_id=teacher.id,
         teacher_name=teacher.name,
         teacher_email=teacher.email,
         is_active=teacher.is_active,
-        total_courses=len(courses),
+        total_courses=len(course_detail_rows),
         total_sessions=len(session_rows),
         completed_sessions_count=completed_sessions_count,
-        overall_avg_final_score=float(sum(overall_scores) / len(overall_scores)) if overall_scores else None,
+        overall_avg_final_score=overall_avg,
         courses=course_details,
         sessions=session_rows,
     )

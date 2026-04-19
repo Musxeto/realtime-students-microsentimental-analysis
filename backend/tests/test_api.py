@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -65,6 +66,23 @@ def _login_tokens(client, email: str, password: str) -> dict:
     assert body["access_token"]
     assert body.get("refresh_token")
     return body
+
+
+def _create_isolated_course_for_session_tests(client, admin_token: str) -> dict:
+    suffix = uuid4().hex[:8]
+    teacher_res = client.post(
+        "/admin/teachers",
+        json={
+            "name": f"Session Teacher {suffix}",
+            "email": f"session_teacher_{suffix}@fyp.com",
+            "password": "1234",
+            "course_names": [f"Session Course {suffix}"],
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert teacher_res.status_code == 200
+    body = teacher_res.json()
+    return body["courses"][0]
 
 
 def test_login_success(client):
@@ -249,11 +267,9 @@ def test_sessions_list_and_detail_endpoints(client, monkeypatch):
 
     monkeypatch.setattr(inference_service, "stream_video", _MockStream())
 
-    courses_data = client.get("/courses", params={"limit": 100}, headers={"Authorization": f"Bearer {admin_token}"}).json()
-    courses = courses_data["items"]
-    assert len(courses) > 0
-    course_id = courses[0]["id"]
-    video_path = courses[0]["available_videos"][0] if courses[0]["available_videos"] else "tests/test_video.mp4"
+    course = _create_isolated_course_for_session_tests(client, admin_token)
+    course_id = course["id"]
+    video_path = "tests/test_video.mp4"
 
     start = client.post(
         "/sessions/start",
@@ -284,11 +300,8 @@ def test_session_logs_and_analytics_endpoints(client, monkeypatch):
 
     monkeypatch.setattr(inference_service, "stream_video", _MockStream())
 
-    courses_data = client.get("/courses", params={"limit": 100}, headers={"Authorization": f"Bearer {admin_token}"}).json()
-    courses = courses_data["items"]
-    assert len(courses) > 0
-    course = next((row for row in courses if row.get("instructor_id") is not None), courses[0])
-    video_path = course["available_videos"][0] if course["available_videos"] else "tests/test_video.mp4"
+    course = _create_isolated_course_for_session_tests(client, admin_token)
+    video_path = "tests/test_video.mp4"
 
     started = client.post(
         "/sessions/start",
@@ -418,9 +431,7 @@ def test_alert_config_and_session_metrics(client, monkeypatch):
     admin_token = _login(client, "admin@fyp.com", "admin123")
     monkeypatch.setattr(inference_service, "stream_video", _LowEngagementStream())
 
-    courses_data = client.get("/courses", params={"limit": 100}, headers={"Authorization": f"Bearer {admin_token}"}).json()
-    courses = courses_data["items"]
-    course = courses[0]
+    course = _create_isolated_course_for_session_tests(client, admin_token)
 
     config_res = client.put(
         f"/courses/{course['id']}/alert-config",
@@ -432,7 +443,7 @@ def test_alert_config_and_session_metrics(client, monkeypatch):
 
     start = client.post(
         "/sessions/start",
-        json={"course_id": course["id"], "video_path": course["available_videos"][0] if course["available_videos"] else "tests/test_video.mp4", "frame_step": 5},
+        json={"course_id": course["id"], "video_path": "tests/test_video.mp4", "frame_step": 5},
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert start.status_code == 200
@@ -451,3 +462,73 @@ def test_alert_config_and_session_metrics(client, monkeypatch):
     body = metrics.json()
     assert body["alert_count"] >= 1
     assert body["avg_latency_ms"] is not None
+
+
+def test_teacher_aggregates_consistent_across_admin_endpoints(client, monkeypatch):
+    admin_token = _login(client, "admin@fyp.com", "admin123")
+
+    create_teacher_res = client.post(
+        "/admin/teachers",
+        json={
+            "name": "Teacher Aggregate",
+            "email": "teacher_aggregate@fyp.com",
+            "password": "1234",
+            "course_names": ["Aggregate Course A", "Aggregate Course B"],
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_teacher_res.status_code == 200
+    created_teacher = create_teacher_res.json()["teacher"]
+    created_courses = create_teacher_res.json()["courses"]
+    assert len(created_courses) == 2
+
+    monkeypatch.setattr(inference_service, "stream_video", _MockStream())
+    start = client.post(
+        "/sessions/start",
+        json={
+            "course_id": created_courses[0]["id"],
+            "video_path": "tests/test_video.mp4",
+            "frame_step": 5,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert start.status_code == 200
+    session_id = start.json()["session_id"]
+
+    with client.websocket_connect(f"/sessions/ws/stream/{session_id}") as ws:
+        _ = ws.receive_json()
+        _ = ws.receive_json()
+
+    end = client.post(f"/sessions/{session_id}/end", headers={"Authorization": f"Bearer {admin_token}"})
+    assert end.status_code == 200
+
+    teachers_res = client.get(
+        "/admin/teachers",
+        params={"search": "teacher_aggregate@fyp.com", "limit": 10, "offset": 0},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert teachers_res.status_code == 200
+    teachers = teachers_res.json()["items"]
+    assert len(teachers) == 1
+    assert teachers[0]["course_count"] == 2
+    assert teachers[0]["session_count"] >= 1
+
+    analytics_res = client.get(
+        f"/admin/teachers/{created_teacher['id']}/analytics",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert analytics_res.status_code == 200
+    analytics = analytics_res.json()
+    assert analytics["total_courses"] == 2
+    assert analytics["total_sessions"] >= 1
+    assert len(analytics["courses"]) == 2
+
+    project_res = client.get(
+        f"/admin/teachers/{created_teacher['id']}/project",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert project_res.status_code == 200
+    project = project_res.json()
+    assert project["total_courses"] == 2
+    assert project["total_sessions"] >= 1
+    assert project["completed_sessions_count"] >= 1
