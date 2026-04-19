@@ -275,7 +275,7 @@ def main():
     parser.add_argument(
         "video",
         nargs="?",
-        default=str(SCRIPT_DIR / "test_video2.mp4"),
+        default=str(SCRIPT_DIR / "ammad-write.mp4"),
         help="Path to input .mp4/.mov/.avi/.mkv video",
     )
     parser.add_argument("--behavior-model", default=str(DEFAULT_BEHAVIOR_MODEL), help="Path to behavior classifier model (.onnx or .pt)")

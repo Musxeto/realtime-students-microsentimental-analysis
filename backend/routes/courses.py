@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ai.inference_utils import discover_video_files
 
-from ..config import settings
+from ..config import BASE_DIR, settings
 from ..database import get_db
 from ..deps import get_admin_user, get_current_user
 from ..models import AlertConfig, ClassSession, Course, User, UserRole, AuditLog
@@ -36,9 +36,16 @@ def _get_available_videos_cached() -> list[str]:
     if now < _video_cache_expires_at:
         return _video_cache_payload
 
+    search_roots = [
+        settings.video_root,
+        settings.ai_dir,
+        settings.video_root / "tests",
+        settings.ai_dir / "tests",
+        BASE_DIR / "ai" / "tests",
+    ]
     videos = [
         str(path.relative_to(settings.video_root)) if path.is_relative_to(settings.video_root) else str(path)
-        for path in discover_video_files([settings.video_root, settings.ai_dir])
+        for path in discover_video_files(search_roots)
     ]
     configured_streams = [source.strip() for source in settings.ip_camera_stream_sources if source.strip()]
     merged_sources = list(dict.fromkeys([*videos, *configured_streams]))

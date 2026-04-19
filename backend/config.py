@@ -25,6 +25,18 @@ def _env_csv(name: str, default: list[str] | None = None) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def _env_path(name: str, default: Path) -> Path:
+    raw = os.getenv(name)
+    candidate = Path(raw) if raw else default
+    return candidate if candidate.is_absolute() else (BASE_DIR / candidate).resolve()
+
+
+def _env_csv_merged(name: str, default: list[str]) -> list[str]:
+    configured = _env_csv(name, default=[])
+    merged = [*default, *configured]
+    return list(dict.fromkeys(item.strip() for item in merged if item.strip()))
+
+
 @dataclass(slots=True)
 class Settings:
     app_name: str = "Real-time Students Micro-Sentimental Analysis"
@@ -35,12 +47,12 @@ class Settings:
     refresh_token_expire_days: int = field(default_factory=lambda: int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7")))
     gemini_api_key: str | None = field(default_factory=lambda: os.getenv("GEMINI_API_KEY"))
     database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", "postgresql+psycopg2://postgres:1234@localhost:5432/fyp"))
-    ai_dir: Path = field(default_factory=lambda: Path(os.getenv("AI_DIR", str(BASE_DIR / "ai"))))
-    video_root: Path = field(default_factory=lambda: Path(os.getenv("VIDEO_ROOT", str(BASE_DIR / "ai"))))
+    ai_dir: Path = field(default_factory=lambda: _env_path("AI_DIR", BASE_DIR / "ai"))
+    video_root: Path = field(default_factory=lambda: _env_path("VIDEO_ROOT", BASE_DIR / "ai"))
     ip_camera_stream_sources: list[str] = field(
-        default_factory=lambda: _env_csv(
+        default_factory=lambda: _env_csv_merged(
             "IP_CAMERA_STREAM_SOURCES",
-            default=["http://192.168.100.118:8080/video"],
+            default=["http://192.168.100.118:8080/video","http://10.243.209.135:8080/video"],
         )
     )
     session_log_batch_size: int = field(default_factory=lambda: int(os.getenv("SESSION_LOG_BATCH_SIZE", "60")))

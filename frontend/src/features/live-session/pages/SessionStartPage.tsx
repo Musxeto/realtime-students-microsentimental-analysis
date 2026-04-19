@@ -18,16 +18,16 @@ export function SessionStartPage() {
     }
   }, [courseId, courses])
 
-  const selectedCourse = useMemo(
-    () => courses.find((course) => course.id === courseId) ?? null,
-    [courseId, courses],
+  const availableVideos = useMemo(
+    () => Array.from(new Set(courses.flatMap((course) => course.available_videos ?? []))),
+    [courses],
   )
 
   useEffect(() => {
-    if (selectedCourse?.available_videos?.length) {
-      setVideoPath((current) => current || selectedCourse.available_videos[0])
+    if (availableVideos.length) {
+      setVideoPath((current) => current || availableVideos[0])
     }
-  }, [selectedCourse])
+  }, [availableVideos])
 
   async function handleStart() {
     if (!courseId || !videoPath.trim()) {
@@ -87,26 +87,20 @@ export function SessionStartPage() {
 
       <label className="block space-y-1">
         <span className="text-sm font-medium text-slate-700">Video Path</span>
-        {selectedCourse?.available_videos?.length ? (
-          <select
-            className="w-full rounded-lg border px-3 py-2 text-sm outline-none ring-indigo-500 focus:ring-2"
-            value={videoPath}
-            onChange={(event) => setVideoPath(event.target.value)}
-          >
-            {selectedCourse.available_videos.map((path) => (
-              <option key={path} value={path}>
-                {path}
-              </option>
+        <input
+          className="w-full rounded-lg border px-3 py-2 text-sm outline-none ring-indigo-500 focus:ring-2"
+          value={videoPath}
+          onChange={(event) => setVideoPath(event.target.value)}
+          placeholder="tests/test_video.mp4 or http://ip:port/video"
+          list="available-video-sources"
+        />
+        {availableVideos.length ? (
+          <datalist id="available-video-sources">
+            {availableVideos.map((path) => (
+              <option key={path} value={path} />
             ))}
-          </select>
-        ) : (
-          <input
-            className="w-full rounded-lg border px-3 py-2 text-sm outline-none ring-indigo-500 focus:ring-2"
-            value={videoPath}
-            onChange={(event) => setVideoPath(event.target.value)}
-            placeholder="tests/test_video.mp4"
-          />
-        )}
+          </datalist>
+        ) : null}
       </label>
 
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
