@@ -266,7 +266,7 @@ export function AdminDashboardPage() {
   }, [sessions])
 
   return (
-    <div className="space-y-6 rounded-2xl bg-gradient-to-br from-slate-50 via-white to-blue-50 p-4 md:p-6">
+    <div className="admin-theme space-y-6 rounded-2xl border border-border/70 bg-gradient-to-br from-background via-card to-background/80 p-4 md:p-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-3xl font-bold text-slate-900">
