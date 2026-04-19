@@ -135,6 +135,17 @@ export interface TeacherListResponse {
   offset: number
 }
 
+export interface AdminSummaryResponse {
+  total_teachers: number
+  active_teachers: number
+  inactive_teachers: number
+  total_courses: number
+  assigned_courses: number
+  unassigned_courses: number
+  total_sessions: number
+  completed_sessions: number
+}
+
 export interface TeacherProjectCourse {
   course_id: number
   course_name: string
@@ -268,7 +279,7 @@ const baseQueryWithAuthGuard: BaseQueryFn<string | FetchArgs, unknown, FetchBase
 export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithAuthGuard,
-  tagTypes: ['Teacher', 'Course', 'Session'],
+  tagTypes: ['Teacher', 'Course', 'Session', 'AdminSummary'],
   endpoints: (builder) => ({
     login: builder.mutation<LoginResponse, LoginRequest>({
       query: (body) => ({
@@ -325,14 +336,14 @@ export const apiSlice = createApi({
         method: 'POST',
         body,
       }),
-      invalidatesTags: ['Course'],
+      invalidatesTags: ['Course', 'AdminSummary'],
     }),
     deleteCourse: builder.mutation<void, number>({
       query: (courseId) => ({
         url: `/courses/${courseId}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Course', 'Session'],
+      invalidatesTags: ['Course', 'Session', 'AdminSummary'],
     }),
     updateCourse: builder.mutation<Course, { courseId: number; payload: UpdateCoursePayload }>({
       query: ({ courseId, payload }) => ({
@@ -340,7 +351,7 @@ export const apiSlice = createApi({
         method: 'PATCH',
         body: payload,
       }),
-      invalidatesTags: ['Course'],
+      invalidatesTags: ['Course', 'AdminSummary'],
     }),
     getCourseAnalytics: builder.query<CourseAnalytics, number>({
       query: (courseId) => `/courses/${courseId}/analytics`,
@@ -364,14 +375,14 @@ export const apiSlice = createApi({
         method: 'POST',
         body,
       }),
-      invalidatesTags: ['Session'],
+      invalidatesTags: ['Session', 'AdminSummary'],
     }),
     endSession: builder.mutation<EndSessionResponse, number>({
       query: (sessionId) => ({
         url: `/sessions/${sessionId}/end`,
         method: 'POST',
       }),
-      invalidatesTags: ['Session', 'Course'],
+      invalidatesTags: ['Session', 'Course', 'AdminSummary'],
     }),
     getSessions: builder.query<SessionListResponse, { course_id?: number; status?: string; limit?: number; offset?: number } | undefined>({
       query: (params) =>
@@ -408,13 +419,17 @@ export const apiSlice = createApi({
       }),
       providesTags: ['Teacher'],
     }),
+    getAdminSummary: builder.query<AdminSummaryResponse, void>({
+      query: () => '/admin/summary',
+      providesTags: ['AdminSummary'],
+    }),
     createTeacher: builder.mutation<CreateTeacherResponse, CreateTeacherRequest>({
       query: (body) => ({
         url: '/admin/teachers',
         method: 'POST',
         body,
       }),
-      invalidatesTags: ['Teacher', 'Course'],
+      invalidatesTags: ['Teacher', 'Course', 'AdminSummary'],
     }),
     updateTeacher: builder.mutation<{ id: number; email: string; name: string; role: string; is_active: boolean }, UpdateTeacherRequest>({
       query: ({ teacherId, payload }) => ({
@@ -422,7 +437,7 @@ export const apiSlice = createApi({
         method: 'PATCH',
         body: payload,
       }),
-      invalidatesTags: ['Teacher'],
+      invalidatesTags: ['Teacher', 'AdminSummary'],
     }),
     adminResetUserPassword: builder.mutation<{ message: string }, { userId: number; new_password: string }>({
       query: ({ userId, new_password }) => ({
@@ -430,7 +445,7 @@ export const apiSlice = createApi({
         method: 'POST',
         body: { new_password },
       }),
-      invalidatesTags: ['Teacher'],
+      invalidatesTags: ['Teacher', 'AdminSummary'],
     }),
     getTeacherAnalytics: builder.query<{
       teacher_id: number
@@ -474,6 +489,7 @@ export const {
   useGetSessionLogsQuery,
   useGetSessionMetricsQuery,
   useGetTeachersQuery,
+  useGetAdminSummaryQuery,
   useCreateTeacherMutation,
   useUpdateTeacherMutation,
   useAdminResetUserPasswordMutation,

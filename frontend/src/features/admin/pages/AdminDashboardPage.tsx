@@ -7,6 +7,7 @@ import {
   useAdminResetUserPasswordMutation,
   useCreateCourseMutation,
   useCreateTeacherMutation,
+  useGetAdminSummaryQuery,
   useDeleteCourseMutation,
   useGetCoursesQuery,
   useGetTeachersQuery,
@@ -67,6 +68,7 @@ export function AdminDashboardPage() {
     offset: coursePage * pageSize,
   })
   const { data: sessionsData } = useGetSessionsQuery({ limit: 200, offset: 0 })
+  const { data: summaryData } = useGetAdminSummaryQuery()
 
   const teachers = teachersData?.items ?? []
   const teacherOptions = allTeachersData?.items ?? teachers
@@ -248,8 +250,11 @@ export function AdminDashboardPage() {
   }
 
   // STATS CARDS
-  const totalSessions = teachers.reduce((sum, t) => sum + t.session_count, 0)
-  const totalCoursesAssigned = teachers.reduce((sum, t) => sum + t.course_count, 0)
+  const totalTeachers = summaryData?.total_teachers ?? teachersTotal
+  const activeTeachers = summaryData?.active_teachers ?? teachers.filter((t) => t.is_active).length
+  const totalCourses = summaryData?.total_courses ?? coursesTotal
+  const assignedCourses = summaryData?.assigned_courses ?? teachers.reduce((sum, t) => sum + t.course_count, 0)
+  const totalSessions = summaryData?.total_sessions ?? teachers.reduce((sum, t) => sum + t.session_count, 0)
   const avgEngagement = useMemo(() => {
     const completedScores = sessions
       .filter((session) => session.final_avg_score != null)
@@ -305,12 +310,12 @@ export function AdminDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-600">Total Teachers</p>
-                  <p className="mt-2 text-3xl font-bold text-slate-900">{teachersTotal}</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-900">{totalTeachers}</p>
                 </div>
                 <Users className="h-12 w-12 text-blue-100" />
               </div>
               <p className="mt-4 text-xs text-slate-500">
-                {teachers.filter((t) => t.is_active).length} active (this page)
+                {activeTeachers} active teachers
               </p>
             </div>
 
@@ -318,11 +323,11 @@ export function AdminDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-600">Total Courses</p>
-                  <p className="mt-2 text-3xl font-bold text-slate-900">{coursesTotal}</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-900">{totalCourses}</p>
                 </div>
                 <BookOpen className="h-12 w-12 text-emerald-100" />
               </div>
-              <p className="mt-4 text-xs text-slate-500">{totalCoursesAssigned} assignments</p>
+              <p className="mt-4 text-xs text-slate-500">{assignedCourses} assigned courses</p>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">

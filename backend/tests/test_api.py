@@ -287,7 +287,7 @@ def test_session_logs_and_analytics_endpoints(client, monkeypatch):
     courses_data = client.get("/courses", params={"limit": 100}, headers={"Authorization": f"Bearer {admin_token}"}).json()
     courses = courses_data["items"]
     assert len(courses) > 0
-    course = courses[0]
+    course = next((row for row in courses if row.get("instructor_id") is not None), courses[0])
     video_path = course["available_videos"][0] if course["available_videos"] else "tests/test_video.mp4"
 
     started = client.post(
@@ -358,6 +358,60 @@ def test_admin_teacher_management_and_course_crud(client):
 
     delete_course_res = client.delete(f"/courses/{course_id}", headers={"Authorization": f"Bearer {admin_token}"})
     assert delete_course_res.status_code == 204
+
+
+def test_admin_summary_reflects_teacher_course_session_updates(client, monkeypatch):
+    admin_token = _login(client, "admin@fyp.com", "admin123")
+
+    summary_before = client.get("/admin/summary", headers={"Authorization": f"Bearer {admin_token}"})
+    assert summary_before.status_code == 200
+    before = summary_before.json()
+
+    create_teacher_res = client.post(
+        "/admin/teachers",
+        json={
+            "name": "Teacher Metrics",
+            "email": "teacher_metrics@fyp.com",
+            "password": "1234",
+            "course_names": ["Metrics Course"],
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create_teacher_res.status_code == 200
+
+    summary_after_teacher = client.get("/admin/summary", headers={"Authorization": f"Bearer {admin_token}"})
+    assert summary_after_teacher.status_code == 200
+    after_teacher = summary_after_teacher.json()
+    assert after_teacher["total_teachers"] == before["total_teachers"] + 1
+    assert after_teacher["total_courses"] == before["total_courses"] + 1
+    assert after_teacher["assigned_courses"] == before["assigned_courses"] + 1
+
+    monkeypatch.setattr(inference_service, "stream_video", _MockStream())
+    metrics_course = create_teacher_res.json()["courses"][0]
+    start = client.post(
+        "/sessions/start",
+        json={
+            "course_id": metrics_course["id"],
+            "video_path": "tests/test_video.mp4",
+            "frame_step": 5,
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert start.status_code == 200
+    session_id = start.json()["session_id"]
+
+    with client.websocket_connect(f"/sessions/ws/stream/{session_id}") as ws:
+        _ = ws.receive_json()
+        _ = ws.receive_json()
+
+    end = client.post(f"/sessions/{session_id}/end", headers={"Authorization": f"Bearer {admin_token}"})
+    assert end.status_code == 200
+
+    summary_after_session = client.get("/admin/summary", headers={"Authorization": f"Bearer {admin_token}"})
+    assert summary_after_session.status_code == 200
+    after_session = summary_after_session.json()
+    assert after_session["total_sessions"] == before["total_sessions"] + 1
+    assert after_session["completed_sessions"] >= before["completed_sessions"] + 1
 
 
 def test_alert_config_and_session_metrics(client, monkeypatch):

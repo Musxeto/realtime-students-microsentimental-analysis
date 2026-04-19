@@ -50,8 +50,6 @@ const authSlice = createSlice({
       state.user = null
       clearAccessToken()
       clearRefreshToken()
-      // Explicitly clear all other browser state to avoid role leaking/caching issues
-      localStorage.clear()
       sessionStorage.clear()
     },
   },

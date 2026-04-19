@@ -289,6 +289,8 @@ def delete_course(course_id: int, admin_user: User = Depends(get_admin_user), db
     course = db.query(Course).filter(Course.id == course_id).first()
     if course is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+
+    db.query(AuditLog).filter(AuditLog.course_id == course.id).update({AuditLog.course_id: None}, synchronize_session=False)
     db.delete(course)
     db.commit()
 

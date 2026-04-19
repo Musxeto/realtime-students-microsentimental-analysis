@@ -129,7 +129,7 @@ export function TeacherDashboardPage() {
   }
 
   const role = useAppSelector(state => state.auth.role)
-  const isAdmin = role === 'ADMIN'
+  const isAdmin = role === 'admin'
 
   const COLORS_STATUS = ['#10b981', '#3b82f6', '#f59e0b', '#94a3b8'] // emerald, blue, amber, slate
 

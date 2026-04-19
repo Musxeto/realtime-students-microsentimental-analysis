@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import get_admin_user
 from ..models import ClassSession, Course, User, UserRole
-from ..schemas import CourseOut, CreateTeacherRequest, CreateTeacherResponse, ResetPasswordRequest, TeacherAnalyticsResponse, TeacherCourseAnalytics, TeacherCourseDetailAnalytics, TeacherListItem, TeacherListResponse, TeacherProjectPageResponse, TeacherSessionAnalytics, UpdateTeacherRequest, UserOut
+from ..schemas import AdminSummaryResponse, CourseOut, CreateTeacherRequest, CreateTeacherResponse, ResetPasswordRequest, TeacherAnalyticsResponse, TeacherCourseAnalytics, TeacherCourseDetailAnalytics, TeacherListItem, TeacherListResponse, TeacherProjectPageResponse, TeacherSessionAnalytics, UpdateTeacherRequest, UserOut
 from ..security import hash_password
 
 
@@ -16,6 +16,38 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 def _default_code_from_name(name: str) -> str:
     return name.strip().upper().replace(" ", "-")[:32]
+
+
+def _build_admin_summary(db: Session) -> AdminSummaryResponse:
+    total_teachers = int(db.query(func.count(User.id)).filter(User.role == UserRole.TEACHER).scalar() or 0)
+    active_teachers = int(
+        db.query(func.count(User.id)).filter(User.role == UserRole.TEACHER, User.is_active.is_(True)).scalar() or 0
+    )
+
+    total_courses = int(db.query(func.count(Course.id)).scalar() or 0)
+    assigned_courses = int(db.query(func.count(Course.id)).filter(Course.instructor_id.isnot(None)).scalar() or 0)
+
+    total_sessions = int(db.query(func.count(ClassSession.id)).scalar() or 0)
+    completed_sessions = int(
+        db.query(func.count(ClassSession.id)).filter(ClassSession.final_avg_score.isnot(None)).scalar() or 0
+    )
+
+    return AdminSummaryResponse(
+        total_teachers=total_teachers,
+        active_teachers=active_teachers,
+        inactive_teachers=total_teachers - active_teachers,
+        total_courses=total_courses,
+        assigned_courses=assigned_courses,
+        unassigned_courses=total_courses - assigned_courses,
+        total_sessions=total_sessions,
+        completed_sessions=completed_sessions,
+    )
+
+
+@router.get("/summary", response_model=AdminSummaryResponse)
+def get_admin_summary(admin_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    _ = admin_user
+    return _build_admin_summary(db)
 
 
 @router.get("/teachers", response_model=TeacherListResponse)
@@ -40,13 +72,30 @@ def list_teachers(
     total = query.count()
     teachers = query.order_by(User.name.asc()).offset(offset).limit(limit).all()
 
+    teacher_ids = [teacher.id for teacher in teachers]
+    course_counts: dict[int, int] = {}
+    session_counts: dict[int, int] = {}
+
+    if teacher_ids:
+        course_count_rows = (
+            db.query(Course.instructor_id, func.count(Course.id))
+            .filter(Course.instructor_id.in_(teacher_ids))
+            .group_by(Course.instructor_id)
+            .all()
+        )
+        course_counts = {int(instructor_id): int(count) for instructor_id, count in course_count_rows if instructor_id is not None}
+
+        session_count_rows = (
+            db.query(Course.instructor_id, func.count(ClassSession.id))
+            .join(ClassSession, ClassSession.course_id == Course.id)
+            .filter(Course.instructor_id.in_(teacher_ids))
+            .group_by(Course.instructor_id)
+            .all()
+        )
+        session_counts = {int(instructor_id): int(count) for instructor_id, count in session_count_rows if instructor_id is not None}
+
     rows: list[TeacherListItem] = []
     for teacher in teachers:
-        course_ids = [course.id for course in db.query(Course).filter(Course.instructor_id == teacher.id).all()]
-        session_count = 0
-        if course_ids:
-            session_count = db.query(ClassSession).filter(ClassSession.course_id.in_(course_ids)).count()
-
         rows.append(
             TeacherListItem(
                 id=teacher.id,
@@ -54,8 +103,8 @@ def list_teachers(
                 email=teacher.email,
                 role=teacher.role.value,
                 is_active=teacher.is_active,
-                course_count=len(course_ids),
-                session_count=session_count,
+                course_count=course_counts.get(teacher.id, 0),
+                session_count=session_counts.get(teacher.id, 0),
             )
         )
     return TeacherListResponse(items=rows, total=total, limit=limit, offset=offset)

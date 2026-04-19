@@ -109,6 +109,17 @@ class TeacherListResponse(BaseModel):
     offset: int
 
 
+class AdminSummaryResponse(BaseModel):
+    total_teachers: int
+    active_teachers: int
+    inactive_teachers: int
+    total_courses: int
+    assigned_courses: int
+    unassigned_courses: int
+    total_sessions: int
+    completed_sessions: int
+
+
 class UpdateTeacherRequest(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=120)
     email: EmailStr | None = None
