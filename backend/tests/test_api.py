@@ -186,6 +186,39 @@ def test_admin_teacher_provisioning_rbac(client):
     assert len(body["courses"]) == 1
 
 
+def test_admin_ai_settings_rbac_and_update(client):
+    teacher_token = _login(client, "teacher@fyp.com", "teacher123")
+    admin_token = _login(client, "admin@fyp.com", "admin123")
+
+    teacher_attempt = client.get(
+        "/admin/settings/ai",
+        headers={"Authorization": f"Bearer {teacher_token}"},
+    )
+    assert teacher_attempt.status_code == 403
+
+    current = client.get(
+        "/admin/settings/ai",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert current.status_code == 200
+    assert current.json()["update_interval_seconds"] >= 60
+
+    updated = client.put(
+        "/admin/settings/ai",
+        json={"update_interval_seconds": 90},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["update_interval_seconds"] == 90
+
+    reread = client.get(
+        "/admin/settings/ai",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert reread.status_code == 200
+    assert reread.json()["update_interval_seconds"] == 90
+
+
 def test_session_start_end_and_websocket_stream(client, monkeypatch):
     admin_token = _login(client, "admin@fyp.com", "admin123")
 

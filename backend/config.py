@@ -45,7 +45,7 @@ class Settings:
     algorithm: str = field(default_factory=lambda: os.getenv("JWT_ALGORITHM", "HS256"))
     access_token_expire_minutes: int = field(default_factory=lambda: int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "300")))
     refresh_token_expire_days: int = field(default_factory=lambda: int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7")))
-    gemini_api_key: str | None = field(default_factory=lambda: os.getenv("GEMINI_API_KEY"))
+    openai_api_key: str | None = field(default_factory=lambda: os.getenv("OPENAI_API_KEY"))
     database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", "postgresql+psycopg2://postgres:1234@localhost:5432/fyp"))
     ai_dir: Path = field(default_factory=lambda: _env_path("AI_DIR", BASE_DIR / "ai"))
     video_root: Path = field(default_factory=lambda: _env_path("VIDEO_ROOT", BASE_DIR / "ai"))

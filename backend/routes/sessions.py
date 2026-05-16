@@ -17,8 +17,10 @@ from ..database import SessionLocal, get_db
 from ..deps import get_current_user
 from ..models import AlertConfig, AlertEvent, ClassSession, Course, PerformanceMetric, SessionLog, SessionStatus, User, UserRole, AuditLog
 from ..schemas import EndSessionResponse, SessionListResponse, SessionLogsResponse, SessionLogOut, SessionMetricsResponse, SessionOut, StartSessionRequest, StartSessionResponse
+from ..services.ai_settings import get_ai_update_interval_seconds
 from ..services.database import session_repository
 from ..services.inference_service import inference_service
+from ..services.openai_service import openai_service
 from ..services.opencv_preview import OpenCVSessionPreview
 from ..services.session_manager import session_manager
 
@@ -380,39 +382,34 @@ async def stream_session(websocket: WebSocket, session_id: int):
                 )
                 state.alert_event_open = False
 
-            # --- Gemini AI Periodic Insight ---
+            # --- OpenAI AI Periodic Insight ---
             if state:
-                # Maintain a rolling window of engagement for the 5-second AI trigger
                 if not hasattr(state, 'engagement_window'):
                     state.engagement_window = []
-                
+
                 state.engagement_window.append(float(payload.get("engagement_score", 0.0)))
-                
+
                 current_time = monotonic()
-                # Trigger an AI suggestion every 15 seconds to stay within free-tier quota (RPM)
-                # We also check for 'significant change' or forced update after 3 mins
-                if current_time - getattr(state, 'last_ai_call_at', 0.0) >= 15.0:
-                    # Calculate average engagement for the window
+                ai_update_interval_seconds = get_ai_update_interval_seconds(db)
+                if current_time - getattr(state, 'last_ai_call_at', 0.0) >= ai_update_interval_seconds:
                     if state.engagement_window:
                         avg_window_engagement = sum(state.engagement_window) / len(state.engagement_window)
                     else:
                         avg_window_engagement = float(payload.get("engagement_score", 0.0))
-                    
-                    # Logic to skip unnecessary AI calls:
+
                     last_val = getattr(state, 'last_ai_engagement', -1.0)
                     last_alert = getattr(state, 'last_ai_alert_active', None)
                     curr_alert = bool(alert_state and alert_state.get("active"))
-                    
+
                     significant = (
-                        abs(avg_window_engagement - last_val) >= 5.0 or 
+                        abs(avg_window_engagement - last_val) >= 5.0 or
                         curr_alert != last_alert or
                         (current_time - getattr(state, 'last_ai_call_at', 0.0)) > 180.0
                     )
-                    
-                    state.engagement_window = [] # Reset window for next segment
-                    
+
+                    state.engagement_window = []
+
                     if not significant and last_val != -1.0:
-                        # Skip this call to save quota, but still update the timer
                         state.last_ai_call_at = current_time
                         import logging
                         logging.getLogger(__name__).debug(f"Session {session_id}: Skipping AI call (No significant change).")
@@ -420,35 +417,33 @@ async def stream_session(websocket: WebSocket, session_id: int):
                         state.last_ai_call_at = current_time
                         state.last_ai_engagement = avg_window_engagement
                         state.last_ai_alert_active = curr_alert
-                        
+
                         async def fetch_insight(curr_state, engagement, payload_snapshot, alert_status):
                             try:
-                                from ..services.gemini_service import gemini_service
                                 import logging
                                 srv_logger = logging.getLogger(__name__)
-                                srv_logger.info(f"Session {session_id}: Requesting Gemini pedagogical insight (Avg Engagement: {engagement:.1f})...")
-                                
-                                insight = await gemini_service.generate_pedagogical_insight(
+                                srv_logger.info(f"Session {session_id}: Requesting OpenAI pedagogical insight (Avg Engagement: {engagement:.1f})...")
+
+                                insight = await openai_service.generate_pedagogical_insight(
                                     engagement_score=engagement,
                                     distracted_count=int(payload_snapshot.get("distracted_count", 0)),
                                     student_count=int(payload_snapshot.get("student_count", 0)),
                                     alert_active=alert_status,
                                     course_code=curr_state.course_code_str or "Class",
-                                    teacher_name=curr_state.teacher_name_str or "Teacher"
+                                    teacher_name=curr_state.teacher_name_str or "Teacher",
                                 )
                                 if insight:
                                     curr_state.ai_insight = insight
                                     srv_logger.info(f"Session {session_id}: AI Insight received: {insight}")
                                 else:
-                                    srv_logger.warning(f"Session {session_id}: Gemini returned empty insight.")
+                                    srv_logger.warning(f"Session {session_id}: OpenAI returned empty insight.")
                             except Exception as e:
                                 import logging
                                 logging.getLogger(__name__).error(f"Error fetching AI insight: {e}")
-                            
+
                     asyncio.create_task(fetch_insight(state, avg_window_engagement, dict(payload), curr_alert))
-                    
+
                 if state.ai_insight:
-                    # Dynamically inject the Gemini insight into the stream
                     if alert_state and alert_state.get("active"):
                         alert_state["reason"] = f"AI Alert: {state.ai_insight}"
                     else:

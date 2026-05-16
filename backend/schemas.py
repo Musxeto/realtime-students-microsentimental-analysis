@@ -268,6 +268,14 @@ class AlertConfigOut(BaseModel):
     enabled: bool
 
 
+class AISettingsRequest(BaseModel):
+    update_interval_seconds: int = Field(ge=60, le=3600)
+
+
+class AISettingsOut(BaseModel):
+    update_interval_seconds: int
+
+
 class SessionMetricsResponse(BaseModel):
     session_id: int
     avg_latency_ms: float | None

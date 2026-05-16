@@ -97,6 +97,15 @@ class AlertConfig(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class AISettings(Base):
+    __tablename__ = "ai_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    update_interval_seconds = Column(Integer, nullable=False, default=60)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
 class AlertEvent(Base):
     __tablename__ = "alert_events"
 

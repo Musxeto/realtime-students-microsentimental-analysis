@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import get_admin_user
-from ..models import ClassSession, Course, User, UserRole
-from ..schemas import AdminSummaryResponse, CourseOut, CreateTeacherRequest, CreateTeacherResponse, ResetPasswordRequest, TeacherAnalyticsResponse, TeacherCourseAnalytics, TeacherCourseDetailAnalytics, TeacherListItem, TeacherListResponse, TeacherProjectPageResponse, TeacherSessionAnalytics, UpdateTeacherRequest, UserOut
+from ..models import AISettings, ClassSession, Course, User, UserRole
+from ..schemas import AISettingsOut, AISettingsRequest, AdminSummaryResponse, CourseOut, CreateTeacherRequest, CreateTeacherResponse, ResetPasswordRequest, TeacherAnalyticsResponse, TeacherCourseAnalytics, TeacherCourseDetailAnalytics, TeacherListItem, TeacherListResponse, TeacherProjectPageResponse, TeacherSessionAnalytics, UpdateTeacherRequest, UserOut
 from ..security import hash_password
+from ..services.ai_settings import DEFAULT_AI_UPDATE_INTERVAL_SECONDS, get_ai_settings as get_ai_settings_record, upsert_ai_settings
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -350,6 +351,22 @@ def delete_all_teachers(admin_user: User = Depends(get_admin_user), db: Session 
         for teacher in teachers:
             db.delete(teacher)
         db.commit()
+
+
+@router.get("/settings/ai", response_model=AISettingsOut)
+def get_ai_settings(admin_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    _ = admin_user
+    settings = get_ai_settings_record(db)
+    if settings is None:
+        return AISettingsOut(update_interval_seconds=DEFAULT_AI_UPDATE_INTERVAL_SECONDS)
+    return AISettingsOut(update_interval_seconds=max(DEFAULT_AI_UPDATE_INTERVAL_SECONDS, int(settings.update_interval_seconds)))
+
+
+@router.put("/settings/ai", response_model=AISettingsOut)
+def update_ai_settings(payload: AISettingsRequest, admin_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    _ = admin_user
+    settings = upsert_ai_settings(db, update_interval_seconds=payload.update_interval_seconds)
+    return AISettingsOut(update_interval_seconds=max(DEFAULT_AI_UPDATE_INTERVAL_SECONDS, int(settings.update_interval_seconds)))
 
 
 @router.delete("/courses", status_code=status.HTTP_204_NO_CONTENT)
