@@ -5,9 +5,10 @@ export type ThemeMode = 'light' | 'dark'
 const THEME_STORAGE_KEY = 'classpulse_theme'
 
 function getInitialTheme(): ThemeMode {
-  const persisted = localStorage.getItem(THEME_STORAGE_KEY)
+  const persistedRaw = localStorage.getItem(THEME_STORAGE_KEY)
+  const persisted = persistedRaw ? String(persistedRaw).trim().toLowerCase() : null
   if (persisted === 'light' || persisted === 'dark') {
-    return persisted
+    return persisted as ThemeMode
   }
 
   if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {

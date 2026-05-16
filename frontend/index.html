@@ -9,8 +9,9 @@
       (function () {
         var key = 'classpulse_theme'
         var saved = localStorage.getItem(key)
+        var normalized = saved ? String(saved).trim().toLowerCase() : null
         var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-        var mode = saved === 'light' || saved === 'dark' ? saved : (prefersDark ? 'dark' : 'light')
+        var mode = normalized === 'light' || normalized === 'dark' ? normalized : (prefersDark ? 'dark' : 'light')
         if (mode === 'dark') {
           document.documentElement.classList.add('dark')
         }

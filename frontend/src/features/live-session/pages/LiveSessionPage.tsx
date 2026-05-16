@@ -326,7 +326,7 @@ export function LiveSessionPage() {
               <div className={`relative border-b px-6 py-4 backdrop-blur-md ${
                 alert_active ? 'border-rose-400/30 bg-rose-500/20' : 'border-white/20 bg-indigo-500/20'
               }`}>
-                <h3 className="flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-white">
+                <h3 className="flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-slate-800 dark:text-white">
                   <div className={`h-2.5 w-2.5 rounded-full ${alert_active ? 'animate-pulse bg-rose-500 shadow-[0_0_10px_#f43f5e]' : 'bg-indigo-400 shadow-[0_0_10px_#818cf8]'}`} />
                   AI Co-Pilot Advisor
                 </h3>
@@ -345,7 +345,7 @@ export function LiveSessionPage() {
                   </div>
                   
                   <div className="space-y-1">
-                    <p className={`text-base font-bold leading-relaxed tracking-tight ${alert_active ? 'text-white' : 'text-slate-100'}`}>
+                    <p className={`text-base font-bold leading-relaxed tracking-tight ${alert_active ? 'text-white' : 'text-slate-800 dark:text-slate-100'}`}>
                       {alert_active
                         ? alertState.reason || 'Sustained low engagement detected.'
                         : lastJsonMessage?.message
@@ -354,7 +354,7 @@ export function LiveSessionPage() {
                     </p>
                     <div className="flex items-center gap-2">
                       <span className={`h-1 w-1 rounded-full ${alert_active ? 'bg-rose-400' : 'bg-indigo-400'}`} />
-                      <p className={`text-[10px] font-black uppercase tracking-widest ${alert_active ? 'text-rose-300' : 'text-indigo-300'}`}>
+                      <p className={`text-[10px] font-black uppercase tracking-widest ${alert_active ? 'text-rose-300' : 'text-indigo-500 dark:text-indigo-300'}`}>
                         Live Pedagogical Stream
                       </p>
                     </div>
