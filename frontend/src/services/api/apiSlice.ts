@@ -99,6 +99,14 @@ export interface AlertConfigRequest {
   enabled: boolean
 }
 
+export interface AISettings {
+  update_interval_seconds: number
+}
+
+export interface AISettingsRequest {
+  update_interval_seconds: number
+}
+
 export interface AuditLog {
   id: number
   timestamp: string
@@ -279,7 +287,7 @@ const baseQueryWithAuthGuard: BaseQueryFn<string | FetchArgs, unknown, FetchBase
 export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithAuthGuard,
-  tagTypes: ['Teacher', 'Course', 'Session', 'AdminSummary'],
+  tagTypes: ['Teacher', 'Course', 'Session', 'AdminSummary', 'AISettings'],
   endpoints: (builder) => ({
     login: builder.mutation<LoginResponse, LoginRequest>({
       query: (body) => ({
@@ -368,6 +376,18 @@ export const apiSlice = createApi({
         body: payload,
       }),
       invalidatesTags: ['Course'],
+    }),
+    getAISettings: builder.query<AISettings, void>({
+      query: () => '/admin/settings/ai',
+      providesTags: ['AISettings'],
+    }),
+    updateAISettings: builder.mutation<AISettings, AISettingsRequest>({
+      query: (body) => ({
+        url: '/admin/settings/ai',
+        method: 'PUT',
+        body,
+      }),
+      invalidatesTags: ['AISettings'],
     }),
     startSession: builder.mutation<StartSessionResponse, StartSessionRequest>({
       query: (body) => ({
@@ -482,6 +502,8 @@ export const {
   useGetCourseAnalyticsQuery,
   useGetAlertConfigQuery,
   useUpdateAlertConfigMutation,
+  useGetAISettingsQuery,
+  useUpdateAISettingsMutation,
   useStartSessionMutation,
   useEndSessionMutation,
   useGetSessionsQuery,

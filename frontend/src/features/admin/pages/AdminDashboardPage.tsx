@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { AlertCircle, BarChart3, BookOpen, ChevronLeft, ChevronRight, Filter, KeyRound, LineChart, Pencil, Plus, Search, Settings, Sparkles, Trash2, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Link } from 'react-router-dom'
@@ -12,6 +12,8 @@ import {
   useGetCoursesQuery,
   useGetTeachersQuery,
   useGetSessionsQuery,
+  useGetAISettingsQuery,
+  useUpdateAISettingsMutation,
   useUpdateAlertConfigMutation,
   useUpdateTeacherMutation,
   useUpdateCourseMutation,
@@ -21,6 +23,7 @@ import { ResetPasswordModal } from '../../../components/modals/ResetPasswordModa
 import { CreateCourseModal } from '../../../components/modals/CreateCourseModal'
 import { EditCourseModal } from '../../../components/modals/EditCourseModal'
 import { UpdateAlertConfigModal } from '../../../components/modals/UpdateAlertConfigModal'
+import { UpdateAISettingsModal } from '../../../components/modals/UpdateAISettingsModal'
 
 type Tab = 'overview' | 'teachers' | 'courses' | 'alerts' | 'settings'
 
@@ -33,6 +36,7 @@ export function AdminDashboardPage() {
   const [updateCourse, { isLoading: updatingCourse }] = useUpdateCourseMutation()
   const [deleteCourse] = useDeleteCourseMutation()
   const [updateAlertConfig, { isLoading: updatingAlertConfig }] = useUpdateAlertConfigMutation()
+  const [updateAISettings, { isLoading: updatingAISettings }] = useUpdateAISettingsMutation()
 
   // Teachers query state
   const [teacherSearch, setTeacherSearch] = useState('')
@@ -69,6 +73,7 @@ export function AdminDashboardPage() {
   })
   const { data: sessionsData } = useGetSessionsQuery({ limit: 200, offset: 0 })
   const { data: summaryData } = useGetAdminSummaryQuery()
+  const { data: aiSettingsData } = useGetAISettingsQuery()
 
   const teachers = teachersData?.items ?? []
   const teacherOptions = allTeachersData?.items ?? teachers
@@ -99,13 +104,10 @@ export function AdminDashboardPage() {
     instructor_id: number | null
   } | null>(null)
   const [isUpdateAlertConfigModalOpen, setIsUpdateAlertConfigModalOpen] = useState(false)
+  const [isUpdateAISettingsModalOpen, setIsUpdateAISettingsModalOpen] = useState(false)
 
   // Alert config state
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null)
-
-  useEffect(() => {
-    if (!selectedCourseId && courses.length > 0) setSelectedCourseId(courses[0].id)
-  }, [courses, selectedCourseId])
 
   // TEACHERS
   const handleCreateTeacher = async (data: { name: string; email: string; password: string; courseNames: string }) => {
@@ -252,6 +254,17 @@ export function AdminDashboardPage() {
     }
   }
 
+  const handleUpdateAISettings = async (data: { update_interval_seconds: number }) => {
+    try {
+      await updateAISettings(data).unwrap()
+      toast.success('AI settings updated.')
+      setIsUpdateAISettingsModalOpen(false)
+    } catch {
+      toast.error('Failed to update AI settings.')
+      throw new Error('Failed to update AI settings.')
+    }
+  }
+
   // STATS CARDS
   const totalTeachers = summaryData?.total_teachers ?? teachersTotal
   const activeTeachers = summaryData?.active_teachers ?? teachers.filter((t) => t.is_active).length
@@ -386,7 +399,6 @@ export function AdminDashboardPage() {
               <button
                 onClick={() => {
                   setActiveTab('alerts')
-                  setIsUpdateAlertConfigModalOpen(true)
                 }}
                 className="flex items-center justify-center gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100"
               >
@@ -772,21 +784,42 @@ export function AdminDashboardPage() {
 
       {/* SETTINGS TAB */}
       {activeTab === 'settings' && (
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">System Settings</h2>
-          <div className="mt-6 space-y-4 text-slate-600">
-            <p className="text-sm">• Backend API: Configured and running</p>
-            <p className="text-sm">• Database: PostgreSQL 15 connected</p>
-            <p className="text-sm">• Teachers: {teachersTotal} active accounts</p>
-            <p className="text-sm">• Courses: {coursesTotal} total courses</p>
-            <p className="text-sm">• Sessions: {totalSessions} recorded sessions</p>
-            <hr className="my-6" />
-            <p className="text-xs text-slate-500">Settings and configuration options will be expanded based on system requirements.</p>
+        <div className="space-y-6">
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">System Settings</h2>
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-medium text-slate-900">LLM provider</p>
+                <p className="mt-1 text-sm text-slate-600">OpenAI</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-medium text-slate-900">Update interval</p>
+                <p className="mt-1 text-sm text-slate-600">{aiSettingsData?.update_interval_seconds ?? 60} seconds</p>
+              </div>
+            </div>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                onClick={() => setIsUpdateAISettingsModalOpen(true)}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
+              >
+                Edit AI settings
+              </button>
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 className="text-base font-semibold text-slate-900">System Overview</h3>
+            <div className="mt-4 space-y-4 text-slate-600">
+              <p className="text-sm">• Backend API: Configured and running</p>
+              <p className="text-sm">• Database: PostgreSQL 15 connected</p>
+              <p className="text-sm">• Teachers: {teachersTotal} active accounts</p>
+              <p className="text-sm">• Courses: {coursesTotal} total courses</p>
+              <p className="text-sm">• Sessions: {totalSessions} recorded sessions</p>
+            </div>
           </div>
         </div>
       )}
 
-     
+      
 
       {/* MODALS */}
       <CreateTeacherModal
@@ -834,6 +867,14 @@ export function AdminDashboardPage() {
         onClose={() => setIsUpdateAlertConfigModalOpen(false)}
         onSubmit={handleUpdateAlertConfig}
         isLoading={updatingAlertConfig}
+      />
+
+      <UpdateAISettingsModal
+        isOpen={isUpdateAISettingsModalOpen}
+        initialUpdateIntervalSeconds={aiSettingsData?.update_interval_seconds ?? 60}
+        onClose={() => setIsUpdateAISettingsModalOpen(false)}
+        onSubmit={handleUpdateAISettings}
+        isLoading={updatingAISettings}
       />
     </div>
   )

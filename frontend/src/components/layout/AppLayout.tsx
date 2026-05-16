@@ -20,7 +20,7 @@ const navItems: NavItem[] = [
   { to: '/teacher/courses', label: 'My Courses', icon: BookOpenCheck, roles: ['teacher', 'admin'] },
   { to: '/teacher/sessions', label: 'My Sessions', icon: ClipboardList, roles: ['teacher', 'admin'] },
   { to: '/teacher/analytics', label: 'My Analytics', icon: LineChart, roles: ['teacher', 'admin'] },
-  { to: '/session/start', label: 'Start Session', icon: Video, roles: ['teacher', 'admin'] },
+  { to: '/session/start', label: 'Start Session', icon: Video, roles: ['teacher'] },
 ]
 
 export function AppLayout() {

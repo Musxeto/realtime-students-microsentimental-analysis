@@ -121,7 +121,7 @@ export const router = createBrowserRouter([
       {
         path: 'session/start',
         element: withSuspense(
-          <ProtectedRoute allow={['teacher', 'admin']}>
+          <ProtectedRoute allow={['teacher']}>
             <SessionStartPage />
           </ProtectedRoute>,
         ),
