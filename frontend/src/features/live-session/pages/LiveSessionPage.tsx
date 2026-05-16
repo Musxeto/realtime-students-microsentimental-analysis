@@ -63,6 +63,8 @@ export function LiveSessionPage() {
   const alert_active = alertState?.active
   const [alertHistory, setAlertHistory] = useState<Array<{ id: number; msg: string; time: string }>>([])
   const lowEngagementToastRef = useRef<string | null>(null)
+  const prevMessageRef = useRef<string>('')
+  const [messageKey, setMessageKey] = useState(0)
 
   const handleFullscreenToggle = async () => {
     const videoContainer = document.getElementById('video-feed-container')
@@ -144,6 +146,15 @@ export function LiveSessionPage() {
           ...prev,
       ].slice(0, 5))
     }
+    // Animate when message changes
+    const currentMsg = alert_active
+      ? (alertState?.reason || '')
+      : (lastJsonMessage?.message || '')
+    if (currentMsg && currentMsg !== prevMessageRef.current) {
+      prevMessageRef.current = currentMsg
+      setMessageKey((k) => k + 1)
+    }
+
     // Low engagement toast (below 70%)
     if (currentEngagement > 0 && currentEngagement < 70) {
       if (!lowEngagementToastRef.current) {
@@ -195,7 +206,18 @@ export function LiveSessionPage() {
   const PIE_COLORS = ['#10b981', '#f43f5e'] // Emerald for engaged, Rose for distracted
 
   return (
-    <section className={`${isFullscreen ? 'fixed inset-0 z-50 bg-black' : 'grid gap-6 lg:grid-cols-[1.7fr_1fr] xl:grid-cols-[2fr_1fr]'}`}>
+    <>
+      <style>{`
+        @keyframes msgSlideIn {
+          0%   { opacity: 0; transform: translateY(8px) scale(0.98); filter: brightness(1.4); }
+          40%  { opacity: 1; transform: translateY(-2px) scale(1.01); filter: brightness(1.2); }
+          100% { opacity: 1; transform: translateY(0) scale(1); filter: brightness(1); }
+        }
+        .msg-animate {
+          animation: msgSlideIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+      `}</style>
+      <section className={`${isFullscreen ? 'fixed inset-0 z-50 bg-black' : 'grid gap-6 lg:grid-cols-[1.7fr_1fr] xl:grid-cols-[2fr_1fr]'}`}>
       <div className={`${isFullscreen ? 'w-full h-full flex flex-col' : 'flex flex-col gap-6'}`}>
         <div className={`${isFullscreen ? 'flex-1' : 'rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm backdrop-blur-md'}`}>
           <div
@@ -366,7 +388,10 @@ export function LiveSessionPage() {
                   </div>
                   
                   <div className="space-y-1">
-                    <p className={`text-base font-bold leading-relaxed tracking-tight ${alert_active ? 'text-white' : 'text-slate-800 dark:text-slate-100'}`}>
+                    <p
+                      key={messageKey}
+                      className={`msg-animate text-base font-bold leading-relaxed tracking-tight ${alert_active ? 'text-white' : 'text-slate-800 dark:text-slate-100'}`}
+                    >
                       {alert_active
                         ? alertState.reason || 'Sustained low engagement detected.'
                         : lastJsonMessage?.message
@@ -498,5 +523,6 @@ export function LiveSessionPage() {
         </div>
       )}
     </section>
+    </>
   )
 }
