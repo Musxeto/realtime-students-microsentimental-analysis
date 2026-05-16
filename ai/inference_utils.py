@@ -31,13 +31,15 @@ def resolve_person_model(ai_dir: Path) -> Path:
 
 
 def resolve_behavior_model(ai_dir: Path) -> Path:
-    preferred = ai_dir / "fyp_runs" / "classroom_model_v2" / "weights" / "best.onnx"
-    if preferred.exists():
-        return preferred
 
-    preferred_pt = ai_dir / "fyp_runs" / "classroom_model_v2" / "weights" / "best.pt"
+    preferred_pt = ai_dir / "fyp_runs" / "lgu_classroom_finetune" / "weights" / "best.pt"
     if preferred_pt.exists():
         return preferred_pt
+
+    preferred_onnx = ai_dir / "fyp_runs" / "lgu_classroom_finetune" / "weights" / "best.onnx"
+    if preferred_onnx.exists():
+        return preferred_onnx
+
 
     for ext in ("best.onnx", "best.pt"):
         for candidate in (ai_dir / "fyp_runs").rglob(ext):
