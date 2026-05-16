@@ -447,7 +447,7 @@ async def stream_session(websocket: WebSocket, session_id: int):
                                 import logging
                                 logging.getLogger(__name__).error(f"Error fetching AI insight: {e}")
 
-                    asyncio.create_task(fetch_insight(state, avg_window_engagement, dict(payload), curr_alert))
+                        asyncio.create_task(fetch_insight(state, avg_window_engagement, dict(payload), curr_alert))
 
                 if state.ai_insight:
                     if alert_state and alert_state.get("active"):
