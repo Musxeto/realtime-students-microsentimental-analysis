@@ -10,6 +10,10 @@ function formatStreamLabel(source: string): string {
   return lastSegment.replace(/\.[^.]+$/, '')
 }
 
+function formatCourseLabel(course: { course_name: string; semester: number; section: number }): string {
+  return `${course.course_name} (Semester ${course.semester} • Section ${course.section})`
+}
+
 export function SessionStartPage() {
   const navigate = useNavigate()
   const { data: coursesData, isLoading } = useGetCoursesQuery({ limit: 100, include_videos: true })
@@ -81,7 +85,7 @@ export function SessionStartPage() {
           >
             {courses.map((course) => (
               <option key={course.id} value={course.id}>
-                {course.course_name}
+                {formatCourseLabel(course)}
               </option>
             ))}
           </select>
@@ -121,7 +125,7 @@ export function SessionStartPage() {
       <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-slate-800">
-            ClassStreams for {selectedCourse?.course_name ?? 'selected course'} ({availableVideos.length})
+            ClassStreams for {selectedCourse ? formatCourseLabel(selectedCourse) : 'selected course'} ({availableVideos.length})
           </p>
           {videoPath ? (
             <span className="text-xs text-slate-600" title={videoPath}>

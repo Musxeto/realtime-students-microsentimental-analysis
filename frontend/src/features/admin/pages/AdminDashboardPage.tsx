@@ -72,6 +72,9 @@ export function AdminDashboardPage() {
 
   const teachers = teachersData?.items ?? []
   const teacherOptions = allTeachersData?.items ?? teachers
+  const teacherNameById = useMemo(() => {
+    return new Map<number, string>(teacherOptions.map((t) => [t.id, t.name]))
+  }, [teacherOptions])
   const teachersTotal = teachersData?.total ?? 0
   const courses = coursesData?.items ?? []
   const coursesTotal = coursesData?.total ?? 0
@@ -643,7 +646,7 @@ export function AdminDashboardPage() {
               >
                 <option value="all">All Instructors</option>
                 {/* We can use all teachers found so far if we want, or just a generic list */}
-                {teachers.map((t) => (
+                {teacherOptions.map((t) => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
@@ -677,7 +680,7 @@ export function AdminDashboardPage() {
                         <td className="px-6 py-3 text-slate-600">{c.course_code}</td>
                         <td className="px-6 py-3 text-slate-600">{c.semester}</td>
                         <td className="px-6 py-3 text-slate-600">{c.section}</td>
-                        <td className="px-6 py-3 text-slate-600">{teachers.find((t) => t.id === c.instructor_id)?.name || 'Unassigned'}</td>
+                        <td className="px-6 py-3 text-slate-600">{(c.instructor_id != null ? teacherNameById.get(c.instructor_id) : undefined) || 'Unassigned'}</td>
                         <td className="px-6 py-3 text-sm">
                           <div className="flex items-center gap-2">
                           <button

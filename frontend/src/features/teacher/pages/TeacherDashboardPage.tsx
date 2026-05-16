@@ -93,6 +93,8 @@ export function TeacherDashboardPage() {
           id: course.id,
           name: course.course_name,
           code: course.course_code,
+          semester: course.semester,
+          section: course.section,
           sessions: courseSessions.length,
           completed: scores.length,
           avg,
@@ -297,7 +299,7 @@ export function TeacherDashboardPage() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="font-bold text-slate-900">{course.name}</p>
-                  <p className="text-xs font-semibold text-slate-500">{course.code}</p>
+                  <p className="text-xs font-semibold text-slate-500">{course.code} • Semester {course.semester} • Section {course.section}</p>
                 </div>
                 <div className="rounded-lg bg-indigo-100/50 px-3 py-1">
                   <p className="text-sm font-bold text-indigo-700">{course.avg}% Avg</p>
@@ -353,7 +355,7 @@ export function TeacherDashboardPage() {
             <option value="ALL">All Courses</option>
             {courses.map((course) => (
               <option key={course.id} value={course.id}>
-                {course.course_name}
+                {course.course_name} (Semester {course.semester} • Section {course.section})
               </option>
             ))}
           </select>
