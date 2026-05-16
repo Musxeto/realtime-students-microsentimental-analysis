@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import toast from 'react-hot-toast'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   Area,
@@ -61,6 +62,7 @@ export function LiveSessionPage() {
   const overlayDetections = detections
   const alert_active = alertState?.active
   const [alertHistory, setAlertHistory] = useState<Array<{ id: number; msg: string; time: string }>>([])
+  const lowEngagementToastRef = useRef<string | null>(null)
 
   const handleFullscreenToggle = async () => {
     const videoContainer = document.getElementById('video-feed-container')
@@ -142,7 +144,21 @@ export function LiveSessionPage() {
           ...prev,
       ].slice(0, 5))
     }
-  }, [lastJsonMessage, alertHistory])
+    // Low engagement toast (below 70%)
+    if (currentEngagement > 0 && currentEngagement < 70) {
+      if (!lowEngagementToastRef.current) {
+        lowEngagementToastRef.current = toast.error(
+          `⚠️ Engagement dropped to ${Math.round(currentEngagement)}%! Class needs attention.`,
+          { duration: 8000, id: 'low-engagement-alert' }
+        )
+      }
+    } else {
+      if (lowEngagementToastRef.current) {
+        toast.dismiss('low-engagement-alert')
+        lowEngagementToastRef.current = null
+      }
+    }
+  }, [lastJsonMessage, alertHistory, currentEngagement])
 
   const engagementBreakdown = useMemo(
     () => [
@@ -328,7 +344,12 @@ export function LiveSessionPage() {
               }`}>
                 <h3 className="flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-slate-800 dark:text-white">
                   <div className={`h-2.5 w-2.5 rounded-full ${alert_active ? 'animate-pulse bg-rose-500 shadow-[0_0_10px_#f43f5e]' : 'bg-indigo-400 shadow-[0_0_10px_#818cf8]'}`} />
-                  AI Co-Pilot Advisor
+                  Class Engagement Monitor
+                  {lastJsonMessage?.course_name && (
+                    <span className="ml-1 font-semibold text-slate-500 normal-case tracking-normal">
+                      — {lastJsonMessage.course_name}
+                    </span>
+                  )}
                 </h3>
               </div>
               
@@ -365,21 +386,6 @@ export function LiveSessionPage() {
               <div className={`absolute bottom-0 left-0 h-[2px] w-full transition-transform duration-1000 ${alert_active ? 'bg-rose-500' : 'bg-indigo-500'}`} style={{ transform: `scaleX(${readyState === 1 ? 1 : 0})` }} />
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Intervention History</h3>
-              <div className="mt-4 max-h-40 overflow-y-auto pr-2 space-y-3">
-                {alertHistory.length === 0 ? (
-                  <p className="text-sm italic text-slate-400">No events logged yet.</p>
-                ) : (
-                  alertHistory.map((h) => (
-                    <div key={h.id} className="group flex flex-col rounded-xl border border-slate-100 bg-slate-50 p-3 transition-colors hover:bg-slate-100/50">
-                      <p className="text-sm font-bold text-slate-800">{h.msg}</p>
-                      <p className="mt-1 text-xs font-medium text-slate-400">{h.time}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
           </>
         )}
       </div>
