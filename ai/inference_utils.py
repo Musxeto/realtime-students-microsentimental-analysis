@@ -31,14 +31,13 @@ def resolve_person_model(ai_dir: Path) -> Path:
 
 
 def resolve_behavior_model(ai_dir: Path) -> Path:
+    preferred_onnx = ai_dir / "fyp_runs" / "lgu_classroom_finetune" / "weights" / "best.onnx"
+    if preferred_onnx.exists():
+        return preferred_onnx
 
     preferred_pt = ai_dir / "fyp_runs" / "lgu_classroom_finetune" / "weights" / "best.pt"
     if preferred_pt.exists():
         return preferred_pt
-
-    preferred_onnx = ai_dir / "fyp_runs" / "lgu_classroom_finetune" / "weights" / "best.onnx"
-    if preferred_onnx.exists():
-        return preferred_onnx
 
 
     for ext in ("best.onnx", "best.pt"):
@@ -338,117 +337,81 @@ class FrameAnalysis:
     distracted_count: int
     engagement_score: float
 
-
 class ClassroomAnalyzer:
     def __init__(
         self,
         ai_dir: Path | None = None,
-        person_model_path: Path | None = None,
         behavior_model_path: Path | None = None,
-        person_conf: float = 0.3,
-        behavior_conf: float = 0.1,
-        person_imgsz: int = 640,
-        behavior_imgsz: int = 416,
-        max_det: int = 500,
-        crop_padding: int = 20,
+        behavior_conf: float = 0.25,
+        behavior_imgsz: int = 640,
     ):
         self.ai_dir = ai_dir or AI_DIR
-        self.person_model_path = person_model_path or resolve_person_model(self.ai_dir)
         self.behavior_model_path = behavior_model_path or resolve_behavior_model(self.ai_dir)
-        self.person_conf = person_conf
         self.behavior_conf = behavior_conf
-        self.person_imgsz = person_imgsz
         self.behavior_imgsz = behavior_imgsz
-        self.max_det = max_det
-        self.crop_padding = crop_padding
-        self.person_finder = YOLO(str(self.person_model_path))
+        
+        # You ONLY need your fine-tuned model. No second model required!
         self.behavior_classifier = YOLO(str(self.behavior_model_path))
-
-    def _stage1(self, frame: np.ndarray):
-        results = _predict_person(self.person_finder, frame, self.person_conf, self.person_imgsz, self.max_det)
-
-        raw_boxes: list[list[int]] = []
-        if results and results[0].boxes is not None and len(results[0].boxes) > 0:
-            for box in results[0].boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                raw_boxes.append([x1, y1, x2, y2])
-
-        raw_count = len(raw_boxes)
-        return merge_vertical_fragments(raw_boxes), raw_count
-
-    def _classify_crop(self, frame: np.ndarray):
-        behavior_res = _predict_behavior(self.behavior_classifier, frame, self.behavior_conf, self.behavior_imgsz)
-        label = "unknown"
-        confidence = 0.0
-
-        if behavior_res and behavior_res[0].boxes is not None and len(behavior_res[0].boxes) > 0:
-            boxes = behavior_res[0].boxes
-            best_idx = int(np.argmax(boxes.conf.cpu().numpy()))
-            cls_id = int(boxes.cls[best_idx].item())
-            confidence = float(boxes.conf[best_idx].item())
-            names = self.behavior_classifier.names
-            label = names.get(cls_id, str(cls_id)) if isinstance(names, dict) else names[cls_id]
-
-        return label, round(confidence, 4)
 
     def analyze_frame(self, frame: np.ndarray, frame_index: int, fps: float | None = None) -> dict:
         h, w = frame.shape[:2]
         detections = []
-        merged_boxes, raw_count = self._stage1(frame)
 
-        for idx, (x1, y1, x2, y2) in enumerate(merged_boxes, start=1):
-            x1, y1, x2, y2 = clip_box(x1, y1, x2, y2, w, h)
-            if x2 <= x1 or y2 <= y1:
-                continue
+        # 1. SINGLE-STAGE INFERENCE: Pass the full, uncropped frame directly to your model
+        # iou=0.45 prevents overlapping boxes on the same student
+        results = self.behavior_classifier.predict(
+            frame, 
+            conf=self.behavior_conf, 
+            iou=0.45, 
+            imgsz=self.behavior_imgsz, 
+            verbose=False
+        )
 
-            pad = self.crop_padding
-            px1 = max(0, x1 - pad)
-            py1 = max(0, y1 - pad)
-            px2 = min(w, x2 + pad)
-            py2 = min(h, y2 + pad)
-            person_crop = frame[py1:py2, px1:px2]
+        # 2. EXTRACT DETECTIONS
+        if results and len(results) > 0 and results[0].boxes is not None:
+            boxes = results[0].boxes
+            for idx, box in enumerate(boxes, start=1):
+                # Get coordinates
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                
+                # Get class and confidence
+                cls_id = int(box.cls[0].item())
+                confidence = float(box.conf[0].item())
+                
+                # Safely get label name
+                names = self.behavior_classifier.names
+                label = names.get(cls_id, str(cls_id)) if isinstance(names, dict) else names[cls_id]
 
-            if person_crop.size == 0 or person_crop.shape[0] < 12 or person_crop.shape[1] < 12:
-                label = "unknown"
-                confidence = 0.0
-            else:
-                label, confidence = self._classify_crop(person_crop)
+                detections.append(
+                    {
+                        "person_index": idx,
+                        "box": [x1, y1, x2, y2],
+                        "label": label,
+                        "confidence": round(confidence, 4),
+                        "status": "classified",
+                    }
+                )
 
-            # UX hack: treat unknown students as look_forward instead of surfacing unknown.
-            if label == "unknown":
-                label = "look_forward"
-                confidence = 0.89
-
-            detections.append(
-                {
-                    "person_index": idx,
-                    "box": [x1, y1, x2, y2],
-                    "label": label,
-                    "confidence": confidence,
-                    "status": "classified" if label != "unknown" else "unclassified",
-                }
-            )
-
+        # 3. CALCULATE METRICS
         label_counts = Counter(det["label"] for det in detections)
         distracted_labels = {"sleep", "using_device", "turn_head"}
-        engaged_count = sum(1 for det in detections if det["label"] not in distracted_labels and det["label"] != "unknown")
+        
+        engaged_count = sum(1 for det in detections if det["label"] not in distracted_labels)
         distracted_count = sum(1 for det in detections if det["label"] in distracted_labels)
-        classified_count = sum(1 for det in detections if det["label"] != "unknown")
-        unknown_count = len(detections) - classified_count
         total = len(detections)
         engagement_score = round((engaged_count / total) * 100, 2) if total else 0.0
 
         timestamp_sec = (frame_index / fps) if fps and fps > 0 else None
+        
         return {
             "frame_index": frame_index,
             "timestamp_sec": round(timestamp_sec, 3) if timestamp_sec is not None else None,
             "frame_width": w,
             "frame_height": h,
-            "raw_stage1_boxes": raw_count,
-            "behavior_boxes": len(detections),
+            "behavior_boxes": total,
             "classifications": detections,
-            "classified_count": classified_count,
-            "unknown_count": unknown_count,
+            "classified_count": total,
+            "unknown_count": 0, # No more unknowns since the model handles detection natively
             "engaged_count": engaged_count,
             "distracted_count": distracted_count,
             "engagement_score": engagement_score,
