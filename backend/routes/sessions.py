@@ -383,17 +383,22 @@ async def stream_session(websocket: WebSocket, session_id: int):
                 state.alert_event_open = False
 
             # --- OpenAI AI Periodic Insight ---
+            ROLLING_WINDOW_SECONDS = 10
             if state:
                 if not hasattr(state, 'engagement_window'):
-                    state.engagement_window = []
+                    state.engagement_window = []  # list of (monotonic_time, score)
 
-                state.engagement_window.append(float(payload.get("engagement_score", 0.0)))
+                state.engagement_window.append((monotonic(), float(payload.get("engagement_score", 0.0))))
 
                 current_time = monotonic()
                 ai_update_interval_seconds = get_ai_update_interval_seconds(db)
                 if current_time - getattr(state, 'last_ai_call_at', 0.0) >= ai_update_interval_seconds:
-                    if state.engagement_window:
-                        avg_window_engagement = sum(state.engagement_window) / len(state.engagement_window)
+                    # Keep only entries from the last 10 seconds
+                    cutoff = current_time - ROLLING_WINDOW_SECONDS
+                    recent = [score for ts, score in state.engagement_window if ts >= cutoff]
+
+                    if recent:
+                        avg_window_engagement = sum(recent) / len(recent)
                     else:
                         avg_window_engagement = float(payload.get("engagement_score", 0.0))
 
@@ -407,7 +412,8 @@ async def stream_session(websocket: WebSocket, session_id: int):
                         (current_time - getattr(state, 'last_ai_call_at', 0.0)) > 180.0
                     )
 
-                    state.engagement_window = []
+                    # Trim old entries beyond the window (keep buffer lean)
+                    state.engagement_window = [(ts, s) for ts, s in state.engagement_window if ts >= cutoff]
 
                     if not significant and last_val != -1.0:
                         state.last_ai_call_at = current_time
@@ -429,7 +435,7 @@ async def stream_session(websocket: WebSocket, session_id: int):
                                     distracted_count=int(payload_snapshot.get("distracted_count", 0)),
                                     student_count=int(payload_snapshot.get("student_count", 0)),
                                     alert_active=alert_status,
-                                    course_code=curr_state.course_code_str or "Class",
+                                    course_name=curr_state.course_name_str or curr_state.course_code_str or "Class",
                                     teacher_name=curr_state.teacher_name_str or "Teacher",
                                 )
                                 if insight:

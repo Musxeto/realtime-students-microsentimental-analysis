@@ -27,7 +27,7 @@ class OpenAIService:
         distracted_count: int,
         student_count: int,
         alert_active: bool,
-        course_code: str = "Course",
+        course_name: str = "Course",
         teacher_name: str = "Teacher",
         recent_classes: Optional[list] = None,
     ) -> str | None:
@@ -42,27 +42,43 @@ class OpenAIService:
             return None
 
         engaged_count = max(0, student_count - distracted_count)
-        status = "ALERT! Low engagement detected." if alert_active else "Class is proceeding normally."
+
+        if engagement_score < 70:
+            tone_instruction = (
+                "The engagement is critically low — below 70%. Be STERN and URGENT. "
+                "Express clear disappointment and demand immediate corrective action from the teacher. "
+                "Be direct, firm, and borderline angry — this is unacceptable and you are not happy."
+            )
+        elif engagement_score < 80:
+            tone_instruction = (
+                "The engagement is moderate — between 70% and 80%. Be firm but constructive. "
+                "Acknowledge it's not ideal and push the teacher to do better with concrete suggestions. "
+                "Be professional but clearly not satisfied yet."
+            )
+        else:
+            tone_instruction = (
+                "The engagement is excellent — above 80%. Be genuinely enthusiastic and celebratory. "
+                "Praise the teacher warmly and specifically. Express how impressed you are."
+            )
 
         prompt = (
-            f"You are an expert teaching assistant observing a live classroom for {course_code} taught by {teacher_name}.\n"
-            f"Current status: {status}\n"
+            f"You are a strict classroom performance monitor observing a live session for '{course_name}' taught by {teacher_name}.\n"
             f"Overall Engagement Score: {engagement_score:.1f}%\n"
             f"Students actively engaged: {engaged_count}\n"
             f"Students distracted/sleeping: {distracted_count}\n\n"
-            "Provide a VERY BRIEF personalized coaching message for the teacher. "
-            "Address the teacher by name. Keep it short, direct, and supportive. "
-            "Do not use quotes or introductory phrases."
+            f"{tone_instruction}\n\n"
+            "Write ONE short, punchy message addressed directly to the teacher by name. "
+            "Do NOT use quotes, bullet points, or introductory phrases. Just the message."
         )
 
         payload = {
             "model": self._model,
             "messages": [
-                {"role": "system", "content": "You write concise classroom coaching messages."},
+                {"role": "system", "content": "You are a strict, direct classroom performance coach. You don't sugarcoat — you say exactly what needs to be said based on the engagement data."},
                 {"role": "user", "content": prompt},
             ],
-            "temperature": 0.7,
-            "max_tokens": 80,
+            "temperature": 0.8,
+            "max_tokens": 100,
         }
 
         headers = {
