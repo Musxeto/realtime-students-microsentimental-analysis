@@ -1,0 +1,20 @@
+train: train/images
+val: valid/images
+test: test/images
+nc: 8
+names:
+- handrise
+- look_forward
+- read
+- sleep
+- stand
+- turn_head
+- using_device
+- write
+roboflow:
+  workspace: ghulams-workspace
+  project: fyp-qbway
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/ghulams-workspace/fyp-qbway/dataset/1
+path: /kaggle/input/datasets/mustafaxgm/lgu-student-engagement/my-custom-dataset
