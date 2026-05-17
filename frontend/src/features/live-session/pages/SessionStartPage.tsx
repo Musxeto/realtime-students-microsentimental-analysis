@@ -67,6 +67,23 @@ export function SessionStartPage() {
     }
   }
 
+  if (isLoading) {
+    return (
+      <section className="flex h-96 items-center justify-center rounded-xl border bg-white p-6 shadow-card">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="relative flex h-16 w-16 items-center justify-center">
+            <div className="absolute inset-0 rounded-full border-4 border-indigo-100"></div>
+            <div className="absolute inset-0 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent shadow-[0_0_15px_rgba(79,70,229,0.4)]"></div>
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-base font-bold text-slate-800 animate-pulse">Loading Course Streams...</h2>
+            <p className="text-xs text-slate-500">Fetching available video sources and classes</p>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="space-y-4 rounded-xl border bg-white p-6 shadow-card">
       <h1 className="text-2xl font-semibold text-slate-900">Start Live Session</h1>
@@ -142,11 +159,10 @@ export function SessionStartPage() {
                 type="button"
                 onClick={() => setVideoPath(source)}
                 title={source}
-                className={`w-full rounded-md border px-2 py-1 text-left text-xs transition ${
-                  videoPath === source
+                className={`w-full rounded-md border px-2 py-1 text-left text-xs transition ${videoPath === source
                     ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                     : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
-                }`}
+                  }`}
               >
                 {formatStreamLabel(source)}
               </button>
