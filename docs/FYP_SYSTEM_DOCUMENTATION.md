@@ -11,7 +11,7 @@
 **Supervisor:**
 - Sir Hassan Sultan — Department of Computer Science, Lahore Garrison University
 
-**Date:** April 2026
+**Date:** May 2026 (v2 — Updated)
 
 ---
 
@@ -25,7 +25,7 @@
 6. [Database Design](#6-database-design)
 7. [Authentication & Authorization](#7-authentication--authorization)
 8. [Real-Time Streaming Pipeline](#8-real-time-streaming-pipeline)
-9. [Gemini AI Coaching Integration](#9-gemini-ai-coaching-integration)
+9. [OpenAI AI Coaching Integration](#9-openai-ai-coaching-integration)
 10. [Scripts & Tooling](#10-scripts--tooling)
 11. [DevOps & Deployment](#11-devops--deployment)
 12. [API Reference](#12-api-reference)
@@ -45,36 +45,37 @@ Traditional classroom monitoring relies on manual observation by instructors, wh
 
 ### 1.2 Proposed Solution
 
-This system provides **real-time, AI-powered classroom behavior analytics** using computer vision. A video feed (from a classroom recording or IP camera) is processed frame-by-frame through a Two-Stage YOLOv11 Cascade Pipeline that:
+This system provides **real-time, AI-powered classroom behavior analytics** using computer vision. A video feed (from a classroom recording or IP camera) is processed frame-by-frame through a **fine-tuned single-stage YOLOv11 model** that:
 
-1. **Detects** individual students in the frame (Stage 1 — Person Detection)
-2. **Classifies** each student's behavior (Stage 2 — Behavior Classification)
-3. **Computes** an aggregate engagement score per frame
-4. **Streams** these metrics live to a React dashboard via WebSocket
-5. **Persists** session data to PostgreSQL for historical reporting
-6. **Generates** real-time AI coaching suggestions via Google Gemini
+1. **Detects and classifies** student behaviors in one model pass (no separate person-detection stage)
+2. **Computes** an aggregate engagement score per frame (`engaged_count / total × 100`)
+3. **Streams** these metrics live to a React dashboard via WebSocket
+4. **Persists** session data to PostgreSQL for historical reporting and analytics
+5. **Generates** real-time AI coaching suggestions via the **OpenAI API (GPT-4o-mini)**
 
 ### 1.3 Key Features
 
 | Feature | Description |
 |---------|-------------|
-| **Real-Time Inference** | Frame-by-frame YOLO analysis at ~10–20 FPS |
+| **Single-Stage Inference** | Fine-tuned YOLOv11 detects + classifies in one pass at ~10–20 FPS |
 | **8-Class Behavior Taxonomy** | handrise, read, write, sleep, using_device, stand, look_forward, turn_head |
-| **Live Dashboard** | Engagement score, distraction alerts, and annotated video preview |
-| **Role-Based Access** | Admin (manages teachers/courses) and Teacher (runs sessions) |
-| **Alert System** | Configurable engagement threshold alerts with duration-based triggers |
-| **AI Coaching** | Gemini-powered pedagogical suggestions streamed live to teachers |
-| **Session History** | Persistent logs with course analytics and engagement trends |
+| **Live Dashboard** | Engagement score, distraction alerts, annotated video preview, animated AI coach panel |
+| **Role-Based Access** | Admin (manages teachers/courses/AI settings) and Teacher (runs sessions) |
+| **Alert System** | Configurable engagement threshold alerts; full-screen modal + toast notifications |
+| **OpenAI AI Coaching** | GPT-4o-mini pedagogical suggestions with 10-s rolling window and significance filtering |
+| **Admin AI Settings** | DB-persisted, live-configurable AI coach update interval (min 60 s) |
+| **Session History** | Persistent logs with course analytics, alert events, and performance metrics |
 | **AMD GPU Support** | ONNX Runtime with DirectML acceleration for AMD GPUs on Windows |
+| **IP Camera Support** | HTTP/RTSP camera feeds with automatic URL variant probing |
 
 ### 1.4 Technology Stack Summary
 
 | Layer | Technologies |
 |-------|-------------|
-| **AI / ML** | YOLOv11 (Ultralytics), ONNX Runtime DirectML, OpenCV, PyTorch, NumPy |
-| **Backend** | FastAPI, SQLAlchemy, Alembic, PostgreSQL 15, python-jose (JWT), WebSockets |
-| **Frontend** | React 18, TypeScript, Vite, Redux Toolkit (RTK Query), Tailwind CSS, Recharts, react-use-websocket |
-| **AI Coaching** | Google Gemini API (gemini-3-flash-preview) |
+| **AI / ML** | YOLOv11 fine-tuned (Ultralytics), ONNX Runtime DirectML, OpenCV, PyTorch, NumPy |
+| **Backend** | FastAPI, SQLAlchemy, Alembic, PostgreSQL 15, python-jose (JWT), WebSockets, httpx |
+| **Frontend** | React 18, TypeScript, Vite, Redux Toolkit (RTK Query), Tailwind CSS, Recharts, react-use-websocket, react-hot-toast |
+| **AI Coaching** | **OpenAI API — GPT-4o-mini** (replaces Google Gemini) |
 | **DevOps** | Docker, Docker Compose, GitHub |
 
 ---
@@ -192,9 +193,36 @@ This system provides **real-time, AI-powered classroom behavior analytics** usin
 
 ## 3. AI / Model Component
 
-### 3.1 Two-Stage Cascade Architecture
+### 3.1 Single-Stage Fine-Tuned Architecture (v2)
 
-The inference pipeline uses a **cascade architecture** where two YOLO models work in sequence:
+The inference pipeline now uses a **single fine-tuned YOLOv11 model** that performs both detection and behavior classification in one forward pass. The previous two-stage cascade (person detector → behavior classifier) has been replaced.
+
+```
+Input Video Frame (any resolution)
+         │
+         ▼
+┌────────────────────────────────────────┐
+│  SINGLE-STAGE INFERENCE                │
+│  Model: lgu_classroom_finetune/best.pt │
+│  Task: Detect + Classify in one pass   │
+│  Confidence: 0.25                      │
+│  IoU NMS: 0.45                         │
+│  Image size: 640px                     │
+│  Output: Bounding boxes + class labels │
+└───────────────┬────────────────────────┘
+                │
+                ▼
+┌────────────────────────────────────────┐
+│  AGGREGATION                           │
+│  - Map cls_id → behavior label         │
+│  - Count engaged vs distracted         │
+│  - Compute engagement_score (%)        │
+│  - Encode frame preview (base64 JPEG)  │
+│  - Return structured JSON payload      │
+└────────────────────────────────────────┘
+```
+
+**Why single-stage?** The fine-tuned model was trained on LGU classroom data and can directly localize and classify student behaviors simultaneously, eliminating the latency, complexity, and error-propagation of the cascade approach.
 
 ```
 Input Video Frame (720p)
@@ -254,7 +282,7 @@ engagement_score = (engaged_count / total_detected) × 100
 
 Where `distracted_labels = {sleep, using_device, turn_head}` and everything else is considered engaged.
 
-### 3.3 Model Training
+### 3.3 Model Training & Fine-Tuning
 
 #### Dataset
 
@@ -264,9 +292,18 @@ Where `distracted_labels = {sleep, using_device, turn_head}` and everything else
 - **Split:** train / valid / test with YOLO-format labels
 - **Format:** YOLO annotation format (class_id center_x center_y width height)
 
+#### Fine-Tuning (v2 — Current)
+
+The model was further **fine-tuned on LGU classroom-specific data** to improve real-world accuracy:
+
+- **Fine-tuning Notebook:** [fyp-finetuning-notebook.ipynb](file:///d:/FYP/FYP%20CODE/ai/fyp-finetuning-notebook.ipynb)
+- **Output run:** `ai/fyp_runs/lgu_classroom_finetune/`
+- **Active weights:** `ai/fyp_runs/lgu_classroom_finetune/weights/best.pt`
+- Fine-tuning reduces false positives and instability in crowded LGU classroom scenes
+
 #### Dataset Merging Strategy
 
-The `build_master_dataset.py` script merges multiple source datasets with different class schemas into one unified 8-class taxonomy using configurable class-ID mapping:
+The `build_master_dataset.py` script merges multiple source datasets:
 
 ```python
 MASTER_CLASSES = [
@@ -291,19 +328,19 @@ Three source datasets are merged:
 - **Platform:** Google Colab GPU (T4/A100)
 - **Framework:** Ultralytics YOLOv11
 - **Notebooks:**
-  - [fyp-notebook.ipynb](file:///d:/FYP/FYP%20CODE/ai/fyp-notebook.ipynb) — Full training pipeline
+  - [fyp-finetuning-notebook.ipynb](file:///d:/FYP/FYP%20CODE/ai/fyp-finetuning-notebook.ipynb) — **Fine-tuning (active, v2)**
+  - [fyp-notebook.ipynb](file:///d:/FYP/FYP%20CODE/ai/fyp-notebook.ipynb) — Original full training pipeline
   - [train_model.ipynb](file:///d:/FYP/FYP%20CODE/ai/train_model.ipynb) — Focused training configuration
-- **Export:** Models exported to ONNX format for local inference
 
 #### Model Files
 
-| File | Size | Purpose |
-|------|------|---------|
-| `ai/yolo11n.onnx` | 10.7 MB | Pre-trained person detector (ONNX) |
-| `ai/yolo11n.pt` | 5.6 MB | Pre-trained person detector (PyTorch fallback) |
-| `ai/yolo26n.pt` | 5.5 MB | Alternative YOLO model |
-| `ai/fyp_runs/classroom_model_v2/weights/best.onnx` | varies | Custom-trained behavior classifier (ONNX) |
-| `ai/fyp_runs/classroom_model_v2/weights/best.pt` | varies | Custom-trained behavior classifier (PyTorch fallback) |
+| File | Size | Purpose | Status |
+|------|------|---------|--------|
+| `ai/fyp_runs/lgu_classroom_finetune/weights/best.pt` | varies | **Fine-tuned single-stage classifier (ACTIVE)** | ✅ In use |
+| `ai/fyp_runs/lgu_classroom_finetune/weights/best.onnx` | varies | ONNX export of fine-tuned model | Optional |
+| `ai/yolo11n.onnx` | 10.7 MB | Pre-trained person detector (legacy reference) | Kept |
+| `ai/yolo11n.pt` | 5.6 MB | Pre-trained person detector (legacy fallback) | Kept |
+| `ai/yolo26n.pt` | 5.5 MB | Alternative YOLO model | Kept |
 
 ### 3.4 Inference Pipeline Code Architecture
 
@@ -311,22 +348,18 @@ The core inference logic lives in [inference_utils.py](file:///d:/FYP/FYP%20CODE
 
 ```
 ai/inference_utils.py
-├── ClassroomAnalyzer          # Main analysis class
-│   ├── __init__()             # Loads both YOLO models
-│   ├── _stage1()              # Person detection + NMS + fragment merging
-│   ├── _classify_crop()       # Behavior classification on person crop
-│   ├── analyze_frame()        # Full two-stage pipeline for one frame
+├── ClassroomAnalyzer          # Main analysis class (single-stage)
+│   ├── __init__()             # Loads fine-tuned YOLO model only
+│   ├── analyze_frame()        # Single model.predict() on full frame
 │   └── analyze_video()        # Iterator over video frames
 │
-├── resolve_person_model()     # Finds yolo11n.onnx/.pt
-├── resolve_behavior_model()   # Finds classroom_model_v2/best.onnx/.pt
-├── resolve_video_path()       # Resolves video file paths
+├── resolve_behavior_model()   # Finds lgu_classroom_finetune/best.pt (.onnx)
+├── resolve_video_path()       # Resolves video file / network stream paths
 ├── discover_video_files()     # Scans directories for video files
 ├── encode_frame_preview()     # Encodes frame to base64 JPEG for WebSocket
-├── merge_vertical_fragments() # Post-processing: merges split person boxes
-├── nms_person()               # Custom Non-Maximum Suppression
-├── iou_xyxy()                 # Intersection over Union calculation
-└── clip_box()                 # Clamps bounding box to frame dimensions
+├── iou_xyxy()                 # IoU helper (retained)
+├── nms_person()               # NMS helper (retained)
+└── clip_box()                 # Box clamping helper (retained)
 ```
 
 ### 3.5 ONNX Runtime & Hardware Acceleration
@@ -342,15 +375,7 @@ ONNX Provider Selection Priority:
 ```
 
 - **AMD RX5700 support** is achieved via `onnxruntime-directml` on Windows
-- ONNX models handle dynamic image size errors with automatic retry logic that parses the expected size from error messages
-
-### 3.6 Dynamic Image Size Error Handling
-
-A notable engineering challenge: fixed-shape ONNX models sometimes reject inputs of unexpected spatial dimensions. The `_predict_behavior()` function handles this with a three-tier retry:
-
-1. **Try** with configured `behavior_imgsz` (default: 416)
-2. **On `INVALID_ARGUMENT`** error — parse the expected size from the error message and retry
-3. **Final fallback** — omit explicit `imgsz` and let the model use its default
+- The fine-tuned `.pt` model is loaded via Ultralytics; export to ONNX is recommended for production performance
 
 ---
 
@@ -365,8 +390,8 @@ backend/
 ├── main.py                    # FastAPI app, CORS, lifespan, routers
 ├── config.py                  # Settings dataclass (env-driven)
 ├── database.py                # SQLAlchemy engine, session factory, Base
-├── models.py                  # ORM models (8 tables)
-├── schemas.py                 # Pydantic request/response schemas (~40 schemas)
+├── models.py                  # ORM models (9 tables)
+├── schemas.py                 # Pydantic request/response schemas
 ├── security.py                # JWT creation/verification, password hashing
 ├── deps.py                    # FastAPI dependency injection (auth guards)
 ├── migrations.py              # Alembic migration helpers
@@ -374,7 +399,7 @@ backend/
 │
 ├── routes/
 │   ├── auth.py                # Login, Logout, Refresh, Change Password, /me
-│   ├── admin.py               # Teacher CRUD, Analytics, Reset Password
+│   ├── admin.py               # Teacher CRUD, AI Settings, Analytics, Reset Password
 │   ├── courses.py             # Course CRUD, Analytics, Alert Config, History
 │   └── sessions.py            # Session Start/End, Logs, Metrics, WebSocket
 │
@@ -382,12 +407,14 @@ backend/
 │   ├── inference_service.py   # InferenceService (wraps ClassroomAnalyzer)
 │   ├── session_manager.py     # In-memory session state + alert tracking
 │   ├── database.py            # SessionRepository (batch DB writes)
-│   ├── gemini_service.py      # Google Gemini AI coaching
+│   ├── openai_service.py      # OpenAI GPT-4o-mini AI coaching (NEW — replaces Gemini)
+│   ├── ai_settings.py         # DB-backed AI update interval config (NEW)
+│   ├── gemini_service.py      # Deprecated stub (no longer called)
 │   └── opencv_preview.py      # Optional local OpenCV mirror window
 │
 ├── tests/
 │   ├── conftest.py            # Pytest fixtures (SQLite in-memory, TestClient)
-│   └── test_api.py            # Integration tests (7 test functions)
+│   └── test_api.py            # Integration tests
 │
 └── alembic/                   # Database migration scripts
 ```
@@ -954,49 +981,73 @@ On session start, the system automatically detects and closes stale sessions:
 
 ---
 
-## 9. Gemini AI Coaching Integration
+## 9. OpenAI AI Coaching Integration
 
 ### 9.1 Architecture
 
+The system uses **OpenAI GPT-4o-mini** via a raw `httpx` async HTTP client (no OpenAI SDK dependency). The `OpenAIService` class in `backend/services/openai_service.py` handles all coaching logic.
+
 ```
 ┌─────────────────────────────┐
-│  WebSocket Stream Loop       │
-│                             │
-│  Every 15 seconds:          │
-│  ├── Check engagement delta │
-│  ├── Significant change?    │
-│  │   ├── YES → Call Gemini  │
-│  │   └── NO  → Skip        │
-│  └── Inject insight into    │
-│      outgoing payload       │
+│  WebSocket Stream Loop        │
+│                              │
+│  Every frame:                │
+│  ├── Append to 10-s window   │
+│  ├── Interval elapsed?       │
+│  │   ├── Compute window avg   │
+│  │   ├── Significant change?  │
+│  │   │   YES → asyncio.task  │
+│  │   │       → OpenAI call   │
+│  │   │       → store insight │
+│  │   └── NO  → skip          │
+│  └── Inject insight into      │
+│      outgoing payload         │
 └─────────────────────────────┘
 ```
 
-### 9.2 Trigger Conditions
+### 9.2 Rolling Window & Trigger Conditions
 
-An AI coaching call is made when ANY of these conditions are met:
-1. **Engagement change ≥ 5%** from last AI call
-2. **Alert state change** (active ↔ inactive)
-3. **3+ minutes** since last AI call (forced update)
-4. **First call** of the session
+- A **10-second rolling window** of `(monotonic_time, engagement_score)` tuples is maintained in `LiveSessionState`.
+- The window average is computed before deciding whether to call the LLM.
+- An AI coaching call is only made when ANY of these conditions are met:
+  1. **Engagement change ≥ 5%** from last AI call (window average vs stored value)
+  2. **Alert state changed** (active ↔ inactive)
+  3. **3+ minutes** elapsed since last AI call (forced refresh)
+  4. **First call** of the session (no previous value)
+
+All LLM calls are dispatched as background `asyncio.Task`s so they never block the WebSocket stream.
 
 ### 9.3 Prompt Engineering
 
-The Gemini prompt is designed for:
-- **Brevity:** Maximum 12 words
-- **Personalization:** Addresses teacher by name
-- **Context-awareness:** Uses engagement score, distracted count, student count
-- **Tone scaling:**
-  - ≥ 90% engagement → Impressed/excited
-  - 80–89% → Casual/cool
-  - < 70% → Urgent but supportive
+The prompt is fully dynamic based on engagement level:
 
-### 9.4 Rate Limiting
+| Engagement | Tone Instruction |
+|------------|------------------|
+| `< 70%` | **Stern and urgent** — express clear disappointment, demand immediate correction |
+| `70–80%` | **Firm but constructive** — push for improvement with concrete suggestions |
+| `≥ 80%` | **Enthusiastic and celebratory** — praise warmly, express genuine approval |
 
-- **Minimum interval:** 15 seconds between calls
-- **Backoff on 429:** 60-second cooldown
-- **Significance filter:** Skips calls when engagement is stable
-- **Graceful degradation:** System works normally without Gemini API key
+Prompt includes: engagement score, engaged count, distracted count, course name, teacher name.
+Response is constrained to **≤ 100 tokens**, no bullet points, one direct message.
+
+### 9.4 Rate Limiting & Reliability
+
+- **Minimum interval:** Configurable via `ai_settings.update_interval_seconds` (minimum 60 s, default 60 s).
+  - Admin can adjust this live from the dashboard without server restart.
+- **Backoff on 429:** 60-second automatic cooldown after OpenAI rate limit.
+- **Graceful degradation:** If `OPENAI_API_KEY` is not set, service logs a warning and returns `None` — the dashboard simply shows no coaching message.
+- **Empty response guard:** Empty or whitespace-only responses are discarded.
+
+### 9.5 Configuration
+
+```bash
+# .env
+OPENAI_API_KEY=sk-...
+
+# Admin Dashboard → AI Settings → Update Interval
+# Minimum: 60 s (enforced server-side)
+# Stored in: ai_settings table
+```
 
 ---
 
@@ -1122,8 +1173,10 @@ volumes:
 cd "d:\FYP\FYP CODE"
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r backend/requirements.txt
 pip install -r requirements.txt
+
+# Set OpenAI key
+$env:OPENAI_API_KEY = "sk-..."
 
 # Run migrations
 python -m alembic -c alembic.ini upgrade head
@@ -1181,6 +1234,9 @@ docker compose up --build
 | GET | `/admin/teachers/{id}/project` | Full teacher project page data | Admin |
 | POST | `/admin/users/{id}/reset-password` | Admin reset user password | Admin |
 | DELETE | `/admin/courses` | Delete all courses | Admin |
+| GET | `/admin/summary` | Platform-wide stats overview | Admin |
+| GET | `/admin/settings/ai` | Get OpenAI coach update interval | Admin |
+| PUT | `/admin/settings/ai` | Set OpenAI coach update interval | Admin |
 
 ### 12.3 Course Endpoints
 
@@ -1517,8 +1573,10 @@ python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
 python-multipart>=0.0.9
 email-validator>=2.2.0
+httpx>=0.28.0           # Used by OpenAI service (async HTTP client)
+python-dotenv>=1.0.0
 pytest>=8.2.0
-google-genai>=0.1.0
+# google-genai>=0.1.0   # Deprecated — Gemini no longer used
 ```
 
 ### Frontend Dependencies (`frontend/package.json`)
@@ -1552,8 +1610,8 @@ cd "d:\FYP\FYP CODE"
 # Backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r backend/requirements.txt
 pip install -r requirements.txt
+$env:OPENAI_API_KEY = "sk-..."   # Required for AI coaching
 python -m alembic -c alembic.ini upgrade head
 uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
@@ -1579,4 +1637,4 @@ docker compose up --build
 
 ---
 
-*This documentation was generated for the Final Year Project at Lahore Garrison University, Department of Computer Science, April 2026.*
+*This documentation was last updated May 2026 (v2) to reflect the fine-tuned single-stage YOLOv11 model, OpenAI GPT-4o-mini coaching integration, and all backend/frontend feature additions since the initial April 2026 release. Final Year Project — Lahore Garrison University, Department of Computer Science.*
