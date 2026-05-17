@@ -65,6 +65,8 @@ export function LiveSessionPage() {
   const lowEngagementToastRef = useRef<string | null>(null)
   const prevMessageRef = useRef<string>('')
   const [messageKey, setMessageKey] = useState(0)
+  const [showClassEndedModal, setShowClassEndedModal] = useState(false)
+  const wasConnectedRef = useRef(false)
 
   const handleFullscreenToggle = async () => {
     const videoContainer = document.getElementById('video-feed-container')
@@ -171,6 +173,27 @@ export function LiveSessionPage() {
     }
   }, [lastJsonMessage, alertHistory, currentEngagement])
 
+  // Show class-ended popup when stream completes
+  useEffect(() => {
+    if (streamCompleted) {
+      setShowClassEndedModal(true)
+    }
+  }, [streamCompleted])
+
+  // Track when we've been live at least once
+  useEffect(() => {
+    if (readyState === 1) {
+      wasConnectedRef.current = true
+    }
+  }, [readyState])
+
+  // Show class-ended modal when WS connection closes after being live
+  useEffect(() => {
+    if (readyState === 3 && wasConnectedRef.current && !streamCompleted) {
+      setShowClassEndedModal(true)
+    }
+  }, [readyState, streamCompleted])
+
   const engagementBreakdown = useMemo(
     () => [
       { label: 'Engaged', value: engagedCount },
@@ -180,16 +203,10 @@ export function LiveSessionPage() {
   )
 
   async function handleEndSession() {
-    if (!id) {
-      return
-    }
+    if (!id) return
     try {
-      const result = await endSession(Number(id)).unwrap()
-      navigate(`/session/${id}/summary`, {
-        state: {
-          final_avg_score: result.final_avg_score,
-        },
-      })
+      await endSession(Number(id)).unwrap()
+      setShowClassEndedModal(true)
     } catch {
       // Keep user on page; stream may still be active.
     }
@@ -205,6 +222,9 @@ export function LiveSessionPage() {
 
   const PIE_COLORS = ['#10b981', '#f43f5e'] // Emerald for engaged, Rose for distracted
 
+  const finalEngagementScore = lastJsonMessage?.engagement_score ?? null
+  const sessionCourse = lastJsonMessage?.course_name ?? 'Class'
+
   return (
     <>
       <style>{`
@@ -215,6 +235,20 @@ export function LiveSessionPage() {
         }
         .msg-animate {
           animation: msgSlideIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        @keyframes modalScaleIn {
+          0%   { opacity: 0; transform: scale(0.88) translateY(24px); }
+          70%  { opacity: 1; transform: scale(1.02) translateY(-4px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .modal-enter {
+          animation: modalScaleIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        @keyframes overlayIn {
+          from { opacity: 0; } to { opacity: 1; }
+        }
+        .overlay-enter {
+          animation: overlayIn 0.3s ease both;
         }
       `}</style>
       <section className={`${isFullscreen ? 'fixed inset-0 z-50 bg-black' : 'grid gap-6 lg:grid-cols-[1.7fr_1fr] xl:grid-cols-[2fr_1fr]'}`}>
@@ -247,7 +281,6 @@ export function LiveSessionPage() {
                   const width = `${Math.max(0, ((x2 - x1) / frameW) * 100)}%`
                   const height = `${Math.max(0, ((y2 - y1) / frameH) * 100)}%`
                   const label = det.label ?? 'unknown'
-                  const confidence = typeof det.confidence === 'number' ? ` ${Math.round(det.confidence * 100)}%` : ''
                   const distracted = label === 'sleep' || label === 'using_device' || label === 'turn_head'
 
                   return (
@@ -262,7 +295,6 @@ export function LiveSessionPage() {
                         }`}
                       >
                         {label.toUpperCase()}
-                        {confidence}
                       </span>
                     </div>
                   )
@@ -523,6 +555,90 @@ export function LiveSessionPage() {
         </div>
       )}
     </section>
+
+      {/* CLASS ENDED MODAL */}
+      {showClassEndedModal && (
+        <div className="overlay-enter fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md">
+          <div className="modal-enter relative mx-4 w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-slate-900/95 shadow-2xl shadow-black/60 backdrop-blur-2xl">
+
+            {/* Top gradient accent — same as engagement monitor panel */}
+            <div className={`h-[3px] w-full ${
+              finalEngagementScore !== null && finalEngagementScore >= 80
+                ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600'
+                : finalEngagementScore !== null && finalEngagementScore >= 70
+                  ? 'bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500'
+                  : 'bg-gradient-to-r from-indigo-500 via-purple-500 to-rose-500'
+            }`} />
+
+            <div className="p-7">
+              {/* Icon circle */}
+              <div className="flex justify-center">
+                <div className={`flex h-16 w-16 items-center justify-center rounded-full border backdrop-blur-md ${
+                  finalEngagementScore !== null && finalEngagementScore >= 80
+                    ? 'border-emerald-500/30 bg-emerald-500/15 shadow-[0_0_20px_rgba(16,185,129,0.2)]'
+                    : finalEngagementScore !== null && finalEngagementScore >= 70
+                      ? 'border-amber-400/30 bg-amber-400/15 shadow-[0_0_20px_rgba(251,191,36,0.2)]'
+                      : 'border-indigo-500/30 bg-indigo-500/15 shadow-[0_0_20px_rgba(99,102,241,0.2)]'
+                }`}>
+                  <svg className={`h-8 w-8 ${
+                    finalEngagementScore !== null && finalEngagementScore >= 80 ? 'text-emerald-400'
+                    : finalEngagementScore !== null && finalEngagementScore >= 70 ? 'text-amber-400'
+                    : 'text-indigo-400'
+                  }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Heading */}
+              <div className="mt-5 text-center">
+                <h2 className="text-xl font-black tracking-tight text-white">Class Has Ended</h2>
+                <p className="mt-0.5 text-xs font-semibold uppercase tracking-widest text-slate-400">{sessionCourse}</p>
+              </div>
+
+              {/* Score — glowing glass badge */}
+              {finalEngagementScore !== null && (
+                <div className="mt-5 flex justify-center">
+                  <div className={`flex flex-col items-center gap-1 rounded-2xl border px-10 py-4 backdrop-blur-md ${
+                    finalEngagementScore >= 80
+                      ? 'border-emerald-500/25 bg-emerald-500/10 shadow-[0_0_24px_rgba(16,185,129,0.15)]'
+                      : finalEngagementScore >= 70
+                        ? 'border-amber-400/25 bg-amber-400/10 shadow-[0_0_24px_rgba(251,191,36,0.15)]'
+                        : 'border-rose-500/25 bg-rose-500/10 shadow-[0_0_24px_rgba(244,63,94,0.15)]'
+                  }`}>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Session Engagement</p>
+                    <p className={`text-4xl font-black tabular-nums leading-none ${
+                      finalEngagementScore >= 80 ? 'text-emerald-400'
+                      : finalEngagementScore >= 70 ? 'text-amber-400'
+                      : 'text-rose-400'
+                    }`}>
+                      {Math.round(finalEngagementScore)}%
+                    </p>
+                    <p className={`text-[11px] font-bold ${
+                      finalEngagementScore >= 80 ? 'text-emerald-500'
+                      : finalEngagementScore >= 70 ? 'text-amber-500'
+                      : 'text-rose-500'
+                    }`}>
+                      {finalEngagementScore >= 80 ? 'Excellent session!' : finalEngagementScore >= 70 ? 'Decent session' : 'Needs improvement'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Buttons */}
+              <div className="mt-6 flex flex-col gap-2">
+                <button
+                  onClick={() => navigate(`/session/${id}/summary`)}
+                  className="w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-900/40 transition hover:bg-indigo-500 active:scale-95"
+                >
+                  View Full Summary →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </>
   )
 }
