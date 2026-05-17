@@ -355,6 +355,12 @@ async def stream_session(websocket: WebSocket, session_id: int):
 
     try:
         async for payload in inference_service.stream_video(state.video_path, frame_step=state.frame_step):
+            state = session_manager.get(session_id)
+            if not state or not state.active:
+                import logging
+                logging.getLogger(__name__).info(f"Session {session_id} is no longer active (manually ended or completed). Terminating WebSocket stream.")
+                break
+
             alert_state = session_manager.consume_frame_payload(session_id, payload)
             now = monotonic()
             flush_logs_due = (now - last_log_flush_at) >= flush_interval
@@ -465,20 +471,21 @@ async def stream_session(websocket: WebSocket, session_id: int):
             await websocket.send_json(outgoing)
             preview.show_payload(outgoing)
 
-        stream_exhausted = True
-        _complete_session_now(session_id, auto_flag="auto_ended_on_stream_complete")
-
         state = session_manager.get(session_id)
-        if state is not None and websocket.client_state.name == "CONNECTED":
-            final = state.last_payload or {}
-            await websocket.send_json(
-                {
-                    "session_id": session_id,
-                    "stream_completed": True,
-                    "message": "Video stream completed",
-                    **final,
-                }
-            )
+        if state and state.active:
+            stream_exhausted = True
+            _complete_session_now(session_id, auto_flag="auto_ended_on_stream_complete")
+
+            if websocket.client_state.name == "CONNECTED":
+                final = state.last_payload or {}
+                await websocket.send_json(
+                    {
+                        "session_id": session_id,
+                        "stream_completed": True,
+                        "message": "Video stream completed",
+                        **final,
+                    }
+                )
     except (WebSocketDisconnect, RuntimeError):
         if stream_exhausted:
             return

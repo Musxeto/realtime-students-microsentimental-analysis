@@ -4,7 +4,6 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
-# Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from backend.services.inference_service import inference_service
@@ -224,10 +223,10 @@ def test_session_start_end_and_websocket_stream(client, monkeypatch):
 
     monkeypatch.setattr(inference_service, "stream_video", _MockStream())
 
-    videos_data = client.get("/courses", params={"limit": 100}, headers={"Authorization": f"Bearer {admin_token}"}).json()
+    videos_data = client.get("/courses", params={"include_videos": True, "limit": 100}, headers={"Authorization": f"Bearer {admin_token}"}).json()
     videos = videos_data["items"]
     assert len(videos) > 0
-    video_path = videos[0]["available_videos"][0] if videos[0]["available_videos"] else "tests/test_video.mp4"
+    video_path = videos[0]["available_videos"][0] if (videos and videos[0].get("available_videos")) else "tests/1-second-scene.mp4"
 
     start = client.post(
         "/sessions/start",
@@ -302,7 +301,7 @@ def test_sessions_list_and_detail_endpoints(client, monkeypatch):
 
     course = _create_isolated_course_for_session_tests(client, admin_token)
     course_id = course["id"]
-    video_path = "tests/test_video.mp4"
+    video_path = "tests/1-second-scene.mp4"
 
     start = client.post(
         "/sessions/start",
@@ -334,7 +333,7 @@ def test_session_logs_and_analytics_endpoints(client, monkeypatch):
     monkeypatch.setattr(inference_service, "stream_video", _MockStream())
 
     course = _create_isolated_course_for_session_tests(client, admin_token)
-    video_path = "tests/test_video.mp4"
+    video_path = "tests/1-second-scene.mp4"
 
     started = client.post(
         "/sessions/start",
@@ -438,7 +437,7 @@ def test_admin_summary_reflects_teacher_course_session_updates(client, monkeypat
         "/sessions/start",
         json={
             "course_id": metrics_course["id"],
-            "video_path": "tests/test_video.mp4",
+            "video_path": "tests/1-second-scene.mp4",
             "frame_step": 5,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -476,7 +475,7 @@ def test_alert_config_and_session_metrics(client, monkeypatch):
 
     start = client.post(
         "/sessions/start",
-        json={"course_id": course["id"], "video_path": "tests/test_video.mp4", "frame_step": 5},
+        json={"course_id": course["id"], "video_path": "tests/1-second-scene.mp4", "frame_step": 5},
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert start.status_code == 200
@@ -520,7 +519,7 @@ def test_teacher_aggregates_consistent_across_admin_endpoints(client, monkeypatc
         "/sessions/start",
         json={
             "course_id": created_courses[0]["id"],
-            "video_path": "tests/test_video.mp4",
+            "video_path": "tests/1-second-scene.mp4",
             "frame_step": 5,
         },
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -565,3 +564,51 @@ def test_teacher_aggregates_consistent_across_admin_endpoints(client, monkeypatc
     assert project["total_courses"] == 2
     assert project["total_sessions"] >= 1
     assert project["completed_sessions_count"] >= 1
+
+
+def test_websocket_closes_when_session_inactive(client, monkeypatch):
+    admin_token = _login(client, "admin@fyp.com", "admin123")
+
+    videos_data = client.get("/courses", params={"include_videos": True, "limit": 100}, headers={"Authorization": f"Bearer {admin_token}"}).json()
+    videos = videos_data["items"]
+    assert len(videos) > 0
+    video_path = videos[0]["available_videos"][0] if (videos and videos[0].get("available_videos")) else "tests/1-second-scene.mp4"
+
+    start = client.post(
+        "/sessions/start",
+        json={"course_id": videos[0]["id"], "video_path": video_path, "frame_step": 5},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert start.status_code == 200
+    session_id = start.json()["session_id"]
+
+    from backend.services.session_manager import session_manager
+    async def mock_stream_ending_session(path, frame_step=5):
+        yield {
+            "frame_index": 0,
+            "timestamp_sec": 0.0,
+            "engagement_score": 75.0,
+            "engaged_count": 3,
+            "distracted_count": 1,
+            "classifications": [],
+        }
+        # Simulating manual class end: mark the session as finished/inactive
+        session_manager.mark_finished(session_id)
+        yield {
+            "frame_index": 5,
+            "timestamp_sec": 1.0,
+            "engagement_score": 50.0,
+            "engaged_count": 2,
+            "distracted_count": 2,
+            "classifications": [],
+        }
+
+    monkeypatch.setattr(inference_service, "stream_video", mock_stream_ending_session)
+
+    from starlette.websockets import WebSocketDisconnect
+    import pytest
+    with client.websocket_connect(f"/sessions/ws/stream/{session_id}") as ws:
+        r1 = ws.receive_json()
+        assert r1["session_id"] == session_id
+        with pytest.raises(WebSocketDisconnect):
+            ws.receive_json()
