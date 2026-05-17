@@ -43,7 +43,7 @@ export function TeacherProjectPage() {
   }
 
   return (
-    <div className="space-y-6 rounded-2xl bg-gradient-to-br from-white via-slate-50 to-blue-50 p-4 md:p-6">
+    <div className="admin-theme space-y-6 rounded-2xl border border-border/70 bg-gradient-to-br from-background via-card to-background/80 p-4 md:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Link to="/admin" className="text-sm font-semibold text-blue-600 hover:underline">

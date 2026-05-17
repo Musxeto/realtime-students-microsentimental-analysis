@@ -136,7 +136,7 @@ export function TeacherDashboardPage() {
   const COLORS_STATUS = ['#10b981', '#3b82f6', '#f59e0b', '#94a3b8'] // emerald, blue, amber, slate
 
   return (
-    <section className="space-y-6 rounded-3xl bg-gradient-to-br from-indigo-50/50 via-white to-blue-50/50 p-4 md:p-8">
+    <section className="space-y-6 rounded-3xl border border-border/70 bg-gradient-to-br from-background via-card to-background/80 p-4 md:p-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-3xl font-extrabold tracking-tight text-slate-900">

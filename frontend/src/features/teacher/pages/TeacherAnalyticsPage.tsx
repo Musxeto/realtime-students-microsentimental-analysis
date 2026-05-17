@@ -60,7 +60,7 @@ export function TeacherAnalyticsPage() {
   const COLORS_COURSES = ['#6366f1', '#06b6d4', '#8b5cf6', '#f59e0b', '#f43f5e', '#14b8a6', '#84cc16', '#0ea5e9']
 
   return (
-    <section className="space-y-6 rounded-3xl bg-slate-50 p-6 md:p-8">
+    <section className="space-y-6 rounded-3xl border border-border/70 bg-gradient-to-br from-background via-card to-background/80 p-6 md:p-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">My Analytics</h1>
         <p className="mt-2 text-sm text-slate-600">Deep analytics and actionable insights for your teaching sessions.</p>
