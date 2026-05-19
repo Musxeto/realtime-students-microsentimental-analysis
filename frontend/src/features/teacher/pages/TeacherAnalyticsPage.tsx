@@ -167,8 +167,8 @@ export function TeacherAnalyticsPage() {
       <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="text-lg font-semibold text-slate-900">Course Workload Split</h3>
         <p className="text-sm text-slate-500">Sessions by course name</p>
-        <div className="mt-6 flex h-80 flex-row items-center">
-          <div className="h-full flex-1">
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-center">
+          <div className="h-80 min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Tooltip
@@ -190,7 +190,7 @@ export function TeacherAnalyticsPage() {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex flex-col gap-3 pr-6">
+          <div className="flex max-h-80 flex-col gap-3 overflow-y-auto pr-2 lg:pr-6">
             {courseDonut.map((entry, idx) => (
               <div key={entry.name} className="flex items-center gap-2 text-sm font-medium text-slate-600">
                 <span className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS_COURSES[idx % COLORS_COURSES.length] }}></span>
