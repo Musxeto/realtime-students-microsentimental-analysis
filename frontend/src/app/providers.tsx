@@ -3,6 +3,7 @@ import { Provider } from 'react-redux'
 import { RouterProvider } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { useAppSelector } from './hooks'
+import { useGetMeQuery } from '../services/api/apiSlice'
 import { ConfirmProvider } from './confirm'
 import { store } from './store'
 import { router } from './router'
@@ -19,10 +20,18 @@ function ThemeSynchronizer() {
   return null
 }
 
+function AuthBootstrap() {
+  // Trigger the `getMe` query on app startup so `state.auth.user` is populated
+  // when a valid access token exists.
+  useGetMeQuery()
+  return null
+}
+
 export function AppProviders() {
   return (
     <Provider store={store}>
       <ThemeSynchronizer />
+      <AuthBootstrap />
       <ConfirmProvider>
         <RouterProvider router={router} />
         <Toaster

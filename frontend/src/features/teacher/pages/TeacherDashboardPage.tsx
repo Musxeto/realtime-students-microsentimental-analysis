@@ -378,7 +378,7 @@ export function TeacherDashboardPage() {
         <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50/80 text-slate-600">
+              <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Session</th>
                   <th className="px-4 py-3 font-semibold">Course</th>
@@ -401,7 +401,7 @@ export function TeacherDashboardPage() {
                           : 'bg-slate-100/80 text-slate-700 border-slate-200'
 
                   return (
-                    <tr key={session.id} className="transition-colors hover:bg-slate-50/50">
+                    <tr key={session.id} className="transition-colors hover:bg-slate-50">
                       <td className="px-4 py-3 font-bold text-slate-800">#{session.id}</td>
                       <td className="px-4 py-3 font-medium text-slate-700">{courseName}</td>
                       <td className="px-4 py-3">
